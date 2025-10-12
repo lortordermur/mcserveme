@@ -385,7 +385,7 @@ download () {
 
 # Check whether a server version is installed. $1 is the version as displayed
 # in the server lists. $2 (optional) is the server type and defaults to
-# “fabric”
+# “$DEFAULT_SERVER_TYPE”
 
 isServerInstalled () {
   version=$1
@@ -491,11 +491,12 @@ cacheEULA () {
   fi
 }
 
-# Build a server list from the list caches.
-# $1 is the subset of servers to echo to stdout (installed, stable or all).
-# $2 is the server type.
+# Build the server lists from the list caches and the jars directory.
+# $1 is the server type.
 # The results are stored in the global server lists:
 # ServerVersionList, ServerVersionListStable and ServerVersionListInstalled
+
+# TODO: Set this up for different server types
 
 buildServerLists () {
   ! fileExists $GAME_VER_FILE && dialogMessageBox "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
@@ -504,18 +505,14 @@ buildServerLists () {
   serverVersion=
 
   serverListJSON=$(cat $GAME_VER_FILE)
-  serverSubset="$1" # installed, stable or all (empty = ‘all’ with no output)
-  [ -z $serverSubset ] && serverSubset="all"
 
-  menulist=
-
-  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType=$2
+  [ -z "$1" ] && serverType=$DEFAULT_SERVER_TYPE || serverType=$1
   
   NumServerVersions=$(echo $serverListJSON | jq ". | length")
   NumStableServerVersions="0"
   NumInstalledServerVersions="0"
 
-  dialogInfoBox "Building server list ‘$serverSubset’ for server type ‘$serverType’ …"
+  dialogInfoBox "Building server lists for server type ‘$serverType’ …"
 
   serverCounter="0"
 
@@ -549,16 +546,6 @@ buildServerLists () {
     ServerVersionList="$ServerVersionList$installedChar$stableChar "
     serverCounter=$((serverCounter + 1))
   done
-
-  case $serverSubset in
-    installed)
-      [ $howMany = "0" ] && dialogMessageBox "No servers" "You do not have any servers installed. Please pick one from the “stable” or “all” list." && return $FALSE
-      menuList=$ServerVersionListInstalled ;;
-    stable)
-      menuList=$ServerVersionListStable ;;
-    all)
-      menuList=$ServerVersionList ;;
-  esac
 }
 
 # Reset all global settings. Command line switches are unaffected
