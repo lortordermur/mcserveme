@@ -643,7 +643,11 @@ menuServerList () {
   case $serverSubset in
     installed)
       menuList=$ServerVersionListInstalled
-      howMany=$NumInstalledServerVersions ;;
+      howMany=$NumInstalledServerVersions
+      if [ $howMany = "0" ]; then
+        dialogMessageBox "No servers" "You do not have any servers installed! Please pick one from the ‘stable’ or ‘all’ list."
+        return $FALSE
+      fi ;;
     stable)
       menuList=$ServerVersionListStable
       howMany=$NumStableServerVersions ;;
@@ -1162,6 +1166,9 @@ downloadServer () {
 
 # Start the server without eula.txt so it is forced to initialize and exit
 
+# TODO:‌ Make this non-interactive if the script was kickstarted, but only if
+# the user has globally agreed to the EULA
+
 initServer () {
   serverVersion="$1"
   [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
@@ -1177,11 +1184,12 @@ initServer () {
   
   resetTerminal
     
-  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar"
+  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar" nogui
 
   # Write whether we have agreed to the EULA into the text file
   
   writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
+
   cd $SCRIPT_DIR
 
   waitForEnter "return to the launcher"
