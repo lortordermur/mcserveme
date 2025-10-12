@@ -40,9 +40,9 @@
 # - Any current Java runtime
 
 # Optional:
-# - tar + gzip
-# - gzip
 # - zip
+# - tar + gzip
+# - 7za
 # - rar
 
 ##################################
