@@ -75,6 +75,7 @@ Alas, the Fabric mod loader has not existed for that long. Hence the erliest sna
 - Editing the whitelist and ops list
 - World and settings backups
 - Multiple worlds per server
+- Make a flatpak
 
 ---
 
