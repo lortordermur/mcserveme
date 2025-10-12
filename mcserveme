@@ -56,6 +56,8 @@
 
 TRUE="0"
 FALSE="1"
+TRUETERM="true"
+FALSETERM="false"
 
 # Basic information
 
@@ -501,7 +503,7 @@ buildServerLists () {
   serverVersion=
 
   serverListJSON=$(cat $GAME_VER_FILE)
-  serverSubset="$1" # installed, stable or all (empty = all with no output)
+  serverSubset="$1" # installed, stable or all (empty = ‘all’ with no output)
   [ -z $serverSubset ] && serverSubset="all"
 
   menulist=
@@ -521,19 +523,19 @@ buildServerLists () {
     serverVersion=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
     ServerVersionList="$ServerVersionList$serverVersion "
 
-    # FIXME: Installed stable servers show as unstable
-    
-    if isServerInstalled "$serverVersion" "$serverType"; then
+    isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
+    isServerInstalled "$serverVersion" "$serverType" && isInstalled="true" || isInstalled="false"
+
+    if [ $isInstalled = "true" ]; then
       NumInstalledServerVersions=$((NumInstalledServerVersions + 1))
       ServerVersionListInstalled="$ServerVersionListInstalled$serverVersion "
       installedChar="I"
+      $isStable && stableChar="S" || stableChar="u"
       ServerVersionListInstalled="$ServerVersionListInstalled$installedChar$stableChar "
     else
       installedChar="a"
     fi
     
-    isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
-
     if [ $isStable = "true" ]; then
       NumStableServerVersions=$((NumStableServerVersions + 1))
       ServerVersionListStable="$ServerVersionListStable$serverVersion "
