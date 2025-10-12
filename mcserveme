@@ -1,0 +1,1372 @@
+#!/bin/sh
+
+#################################################################
+# MCServeMe – the terminal based Minecraft Java server launcher #
+#################################################################
+
+# This is free and unencumbered software released into the public domain.
+# 
+# Anyone is free to copy, modify, publish, use, compile, sell, or
+# distribute this software, either in source code form or as a compiled
+# binary, for any purpose, commercial or non-commercial, and by any
+# means.
+# 
+# In jurisdictions that recognize copyright laws, the author or authors
+# of this software dedicate any and all copyright interest in the
+# software to the public domain. We make this dedication for the benefit
+# of the public at large and to the detriment of our heirs and
+# successors. We intend this dedication to be an overt act of
+# relinquishment in perpetuity of all present and future rights to this
+# software under copyright law.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+# 
+# For more information, please refer to <https://unlicense.org/>
+
+# This script was originally created by Dennis “lortordermur” Murczak
+# <https://github.com/lortordermur>
+
+# Dependencies:
+#
+# - dialog
+# - curl
+# - jq
+# - Any current Java runtime
+
+# Optional:
+# - tar + gzip
+# - gzip
+# - zip
+# - rar
+
+##################################
+# Global constants and variables #
+##################################
+
+# Global constants are capitalized with UNDERSCORE_SPACING, global variables
+# are CamelCase, and local variables always start with a lowercase letter.
+
+# Math and logic constants
+
+TRUE="0"
+FALSE="1"
+
+# Basic information
+
+APP_NAME="MCServeMe"
+SCRIPT_NAME=$(basename $0)
+APP_DESC="the terminal based Minecraft Java server launcher"
+APP_VER="v0.01"
+MAINTAINER="lortordermur"
+
+# Whether we are in developer mode
+
+DEV=$TRUE
+[ $DEV ] && DEV_SUFFIX="-dev"
+
+# Server types; for now only Fabric. When adding server types we would change
+# the “SERVER_*” names to their plurals and use : as a separator.
+
+DEFAULT_SERVER_TYPE="fabric"
+DEFAULT_SERVER_TYPE_NAME="Fabric"
+
+SERVER_TYPE="fabric"
+SERVER_TYPE_NAME="Fabric"
+
+# Fabric Meta API
+
+FABRIC_API_URL="https://meta.fabricmc.net/v2"
+API_CACHE_INTERVAL="3600" # seconds
+
+# Filesystem related stuff
+
+USER_DIR=$HOME
+
+SCRIPT_DIR=$(dirname $0)
+
+LOG_FILE="$USER_DIR/$APP_NAME.log"
+
+TMP_DIR="/tmp"
+
+TMP_FILE="$TMP_DIR/$APP_NAME-tmp"
+
+CONFIG_DIR="$USER_DIR/.config/$APP_NAME"
+CONFIG_FILE="$CONFIG_DIR/config"
+
+LOCAL_DIR="$USER_DIR/.local/share/$APP_NAME"
+JAR_DIR="$LOCAL_DIR/jars"
+WORLD_DIR="$LOCAL_DIR/worlds"
+
+BIN_DIR="$USER_DIR/.local/bin"
+
+CACHE_DIR="$USER_DIR/.cache/$APP_NAME"
+LIST_CACHE_DIR="$CACHE_DIR/lists"
+DOCS_CACHE_DIR="$CACHE_DIR/docs"
+
+# Other caches
+
+EULA_CACHE_INTERVAL="86400" # seconds
+EULA_URL="www.minecraft.net/eula"
+EULA_FILENAME="EULA"
+EULA_FILE="$DOCS_CACHE_DIR/$EULA_FILENAME"
+
+AUTO_CACHE=$TRUE # Whether we want to update the API cache files on startup
+
+GAME_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-gameversions"
+LOADER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-loaderversions"
+INSTALLER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-installerversions"
+
+# The three server version list “arrays”
+
+ServerVersionList=
+ServerVersionListStable=
+ServerVersionListInstalled=
+NumServerVersions=
+NumStableServerVersions=
+NumInstalledServerVersions=
+
+# Desktop directories
+
+APPS_DIR="$USER_DIR/.local/share/applications"
+ICON_THEME_DIR="$USER_DIR/.local/share/icons/hicolor"
+
+# Default option values
+
+DEFAULT_OPTION_JAR_DIR=$JAR_DIR
+DEFAULT_OPTION_WORLD_DIR=$WORLD_DIR
+DEFAULT_OPTION_JAVA_MEMORY="2G"
+DEFAULT_OPTION_TEXT_EDITOR="nano" # Default fallback editor
+DEFAULT_OPTION_AGREED_TO_EULA="false"
+
+# Global option variables
+
+OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
+OptionJarDir=$DEFAULT_OPTION_JAR_DIR
+OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
+OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
+OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
+
+# Option variable keys
+
+JarDirKey="jar-directory"
+WorldDirKey="world-directory"
+JavaMemoryKey="java-memory"
+TextEditorKey="text-editor"
+AgreedToEULAKey="agreed-to-eula"
+
+# Common dialog options
+
+NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
+INFO_DELAY="2" # A somewhat longer delay for infobox chains
+DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
+DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
+
+# Default dialog sizes
+
+MAIN_MENU_SIZE="22 78 22"
+INFOBOX_SIZE="5 60"
+MESSAGEBOX_SIZE="7 60"
+DECISION_BOX_SIZE="9 50"
+PROGRAM_BOX_SIZE="-2 -2"
+INPUTBOX_SIZE="7 60"
+DIR_SELECTOR_SIZE="22 60"
+
+# Dialog return codes
+
+DIALOG_RET_ERROR="-1"
+DIALOG_RET_OK="0"
+DIALOG_RET_CANCEL="1"
+DIALOG_RET_HELP="2"
+DIALOG_RET_EXTRA="3"
+DIALOG_RET_TIMEOUT="5"
+DIALOG_RET_ESC="255"
+
+# Miscellaneous constants
+
+SHEBANG='#!/bin/sh\n'
+
+CONFIG_HEADER="# Generated by $APP_NAME $APP_VER\n"
+
+PING_IP="8.8.8.8" # Google DNS
+CONNECTION_TIMEOUT="30" # seconds
+CONNECTION_RETRIES="2"
+USER_AGENT="$APP_NAME $APP_VER$DEV_SUFFIX (curl $(curl --version | head -n 1 | cut -d " " -f 2); $(uname -si))"
+
+CURL_OPTIONS="--connect-timeout $CONNECTION_TIMEOUT --retry $CONNECTION_RETRIES"
+CURL_OPTIONS_USER_AGENT="$CURL_OPTIONS --user-agent \"$USER_AGENT\" "
+CURL_OPTIONS_FOLLOW="$CURL_OPTIONS -L --max-redirs 2"
+CURL_OPTIONS_USER_AGENT_FOLLOW="$CURL_OPTIONS_USER_AGENT -L --max-redirs 2"
+
+ICON_DIMENSIONS="512" # Dimensions of the bundled desktop icon
+
+KICKSTART=$FALSE # Whether the script was kickstarted
+
+##############
+# Procedures #
+##############
+
+# Quickly reset/unbork the terminal by sending ESC
+
+resetTerminal () {
+  printf "%b" "\033c"
+}
+
+# Portable echo
+
+echo () {
+  printf "%b\n" "$*"
+}
+
+# Return the name of the OS kernel
+
+getKernel () {
+  OS=$(sysctl -n kern.ostype) # Unix-style
+  [ "$OS" ] || OS=$(sysctl -n kernel.ostype) # Linux-style
+  [ "$OS" ] || OS="unknown OS"
+
+  echo $OS
+}
+
+# Return the type of graphical session, if any, as specifically as possible
+
+getDesktop () {
+  desktop=$XDG_SESSION_DESKTOP
+  [ $desktop ] || desktop="unknown DE"
+
+  session=$XDG_SESSION_TYPE
+
+  if [ $session = "tty" ]; then
+    desktop="TTY"
+    echo $desktop
+    return
+  fi
+
+  echo $desktop
+}
+
+# As the name says. $1 signifies what Enter will do
+
+waitForEnter () {
+  what="continue"
+  
+  [ "$1" ] && what=$1
+  
+  echo
+  echo "Press Enter to $what …"
+  read "enter" 2>&1 >/dev/null
+  sleep $NAVIGATION_DELAY
+}
+
+# Check whether a file exists and is a regular file or symlink
+
+fileExists () {
+  [ -f $* ] || [ -h $* ]
+}
+
+# Check whether a file exists and is a regular file
+
+fileExistsRegular () {
+  [ -f $* ]
+}
+
+# Check whether a file exists and is r/w
+
+fileAccessible () {
+  [ -r $* ] && [ -w $* ]
+}
+
+# Last modified time of file $1 in epoch seconds
+
+fileLastModified () {
+  echo $(stat -c %Y "$1")
+}
+
+# Seconds since the epoch
+
+now () {
+  echo $(date +%s)
+}
+
+# Format dialog text $1 reverse red
+
+textFormatError () {
+  echo "\Z1\Zr $* \Zn"
+}
+
+# Format dialog text $1 reverse black
+
+textFormatEmphasis () {
+  echo "\Z0\Zr $* \Zn"
+}
+
+# Follow a symlink chain starting with $1, which must be an executable (the
+# path portion may be omitted if it is in the search path). If anything is
+# given as a second argument, for example "verbose", the output is verbose
+# with infoboxes.
+
+followExecutableSymlinks () {
+  verbose=$2
+  file=$1
+  previousFile=
+
+  [ "$verbose" ] && dialogInfoBox "Resolving symlink chain …" && sleep $NAVIGATION_DELAY
+  
+  while file=$(readlink $(command -v $file)); do
+    [ "$verbose" ] && dialogInfoBox "Resolving $(textFormatEmphasis $file) …" && sleep $NAVIGATION_DELAY
+    previousFile=$file
+  done
+  
+  echo $previousFile
+}
+
+# Check whether command $1 is available in the system and optionally recommend
+# installing the required package $2
+
+checkCommandExists () {
+  errorText=
+  cmd=$1; pkg=$2
+  
+  if [ ! $(command -v $cmd) ]; then
+    errorText="Command '$(textFormatError $cmd)' is not available!"
+    [ $pkg ] && errorText="$errorText Please install the '$(textFormatError $pkg)' package. Exiting."
+
+    dialogMessageBox "Required dependency missing" "$errorText"
+    exit 1
+  fi
+}
+
+# Determine the editor to use
+
+detectTextEditor () {
+  editor=
+
+  if [ "$EDITOR" ]; then
+    dialogInfoBox "’EDITOR’ environment variable is set …"
+    editor=$EDITOR
+    sleep $INFO_DELAY
+  elif [ $(command -v "editor") ]; then # On systems with update-alternatives
+    target=$(followExecutableSymlinks editor)
+    dialogInfoBox "‘editor’ symlink is present, pointing to $(textFormatEmphasis $target) …"
+    editor="editor"
+    sleep $INFO_DELAY
+  elif [ $(command -v "$DEFAULT_OPTION_TEXT_EDITOR") ]; then
+    dialogInfoBox "Using internal default ‘$DEFAULT_OPTION_TEXT_EDITOR’ …"
+    editor=$DEFAULT_OPTION_TEXT_EDITOR
+    sleep $INFO_DELAY
+  else
+    dialogInfoBox "‘$DEFAULT_OPTION_TEXT_EDITOR’ not found, falling back to ‘vi’ …"
+    editor="vi" # Should be installed just about everywhere
+    sleep $INFO_DELAY
+  fi
+  
+  echo $editor
+}
+
+# Return the version of the installed default Java runtime
+
+getJavaVersion () {
+  java --version | head -n 1
+}
+
+# Download and dump to stdout. Typically $1 would be one of the $CURL_OPTIONS*
+# constants and $2 the URL to download from
+
+download () {
+  curl -s $@
+}
+
+# Check whether a server version is installed. $1 is the version as displayed
+# in the server lists. $2 (optional) is the server type and defaults to
+# “fabric”
+
+isServerInstalled () {
+  version=$1
+  [ -z "$2" ] && serverType=$SERVER_TYPE || serverType=$2
+  prefix="$serverType-server-$version"
+
+  fileExists "$OptionJarDir/$prefix/$prefix.jar" && return $TRUE || return $FALSE
+}
+
+# Get the version of latest server jar
+
+getLatestServerVersion () { 
+  online && echo $(cat $GAME_VER_FILE | jq -r ".[0].version") || echo "unknown"
+}
+
+# Get the version of latest stable server jar
+
+getLatestStableServerVersion () {
+  if ! online; then
+    echo "unknown"
+    return $FALSE
+  fi
+
+  serverListJSON=$(cat $GAME_VER_FILE)
+  NumServerVersions=$(echo $serverListJSON | jq ". | length")
+
+  serverCounter="0"
+
+  while [ "$serverCounter" -lt "$NumServerVersions" ]; do
+    isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
+    
+    if [ $isStable = "true" ]; then
+      echo $(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+      return $TRUE
+    fi
+
+    serverCounter=$((serverCounter + 1))
+    
+  done
+  
+  echo "unknown"
+  return $FALSE
+}
+
+# Check whether we need to update something in the cache. $1 is a single
+# filename, $2 is the update interval in seconds
+
+needToCache () {
+  file=$1
+  interval=$2
+
+  [ ! "$interval" ] && $interval="3600" # default to one hour
+
+  timeLastCaching="0"
+  timeNow=$(now)
+  timeDiff=
+  ret=$FALSE
+
+  if fileExistsRegular $file; then
+    timeLastCaching=$(fileLastModified $file)
+    timeDiff=$(($timeNow - $timeLastCaching))
+    [ $timeDiff -ge $interval ] && ret=$TRUE
+  fi
+
+  return $ret
+}
+
+# Get server/loader/installer lists from Fabric Meta and cache them to disk
+# (see: https://github.com/FabricMC/fabric-meta)
+
+cacheFabricMeta () {
+  dialogInfoBox "Caching game versions …"
+  download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/game" > $GAME_VER_FILE
+  
+  if [ ! -s "$GAME_VER_FILE" ] && fileExists $GAME_VER_FILE; then
+    dialogMessageBox "Caching error" "There was a problem updating the game version list! Exiting."
+    exit 1
+  fi
+  
+  dialogInfoBox "Caching loader versions …"
+  download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/loader" > $LOADER_VER_FILE
+
+  if [ ! -s "$LOADER_VER_FILE" ] && fileExists $LOADER_VER_FILE; then
+    dialogMessageBox "Caching error" "There was a problem updating the loader list! Exiting."
+    exit 1
+  fi
+
+  dialogInfoBox "Caching installer versions …"
+  download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/installer" > $INSTALLER_VER_FILE
+  
+  if [ ! -s "$INSTALLER_VER_FILE" ] && fileExists $INSTALLER_VER_FILE; then
+    dialogMessageBox "Caching error" "There was a problem updating the installer list! Exiting."
+    exit 1
+  fi
+}
+
+cacheEULA () {
+  dialogInfoBox "Caching Minecraft EULA …"
+  download "$CURL_OPTIONS_FOLLOW" "$EULA_URL" | HTMLToText | HTMLEULAFilter > $EULA_FILE
+  
+  if [ ! $? ] && fileExists $EULA_FILE; then
+    dialogMessageBox "Caching error" "There was a problem updating the EULA file! Please read the text on $EULA_URL before installing a server with this software."
+  fi
+}
+
+# Build a server list from the list caches.
+# $1 is the subset of servers to echo to stdout (installed, stable or all).
+# $2 is the server type.
+# Returns a list of servers to be passed to a menu-type dialog.
+
+buildServerLists () {
+  ! fileExists $GAME_VER_FILE && dialogMessageBox "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
+
+  ServerVersionList=; ServerVersionListStable=; ServerVersionListInstalled=
+  serverVersion=
+
+  serverListJSON=$(cat $GAME_VER_FILE)
+  serverSubset="$1" # installed, stable or all (empty = all with no output)
+  [ -z $serverSubset ] && serverSubset="all"
+
+  menulist=
+
+  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType=$2
+  
+  NumServerVersions=$(echo $serverListJSON | jq ". | length")
+  NumStableServerVersions="0"
+  NumInstalledServerVersions="0"
+
+  dialogInfoBox "Building server list ‘$serverSubset’ for server type ‘$serverType’ …"
+
+  serverCounter="0"
+
+  while [ "$serverCounter" -lt "$NumServerVersions" ]; do
+
+    serverVersion=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+    ServerVersionList="$ServerVersionList$serverVersion "
+
+    # FIXME: Installed stable servers show as unstable
+    
+    if isServerInstalled "$serverVersion" "$serverType"; then
+      NumInstalledServerVersions=$((NumInstalledServerVersions + 1))
+      ServerVersionListInstalled="$ServerVersionListInstalled$serverVersion "
+      installedChar="I"
+      ServerVersionListInstalled="$ServerVersionListInstalled$installedChar$stableChar "
+    else
+      installedChar="a"
+    fi
+    
+    isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
+
+    if [ $isStable = "true" ]; then
+      NumStableServerVersions=$((NumStableServerVersions + 1))
+      ServerVersionListStable="$ServerVersionListStable$serverVersion "
+      stableChar="S"
+      ServerVersionListStable="$ServerVersionListStable$installedChar$stableChar "
+    else
+      stableChar="u"
+    fi
+
+    ServerVersionList="$ServerVersionList$installedChar$stableChar "
+    serverCounter=$((serverCounter + 1))
+  done
+
+  case $serverSubset in
+    installed)
+      [ $howMany = "0" ] && dialogMessageBox "No servers" "You do not have any servers installed. Please pick one from the “stable” or “all” list." && return $FALSE
+      menuList=$ServerVersionListInstalled ;;
+    stable)
+      menuList=$ServerVersionListStable ;;
+    all)
+      menuList=$ServerVersionList ;;
+  esac
+
+  # Suppress output if called without arguments
+  [ -z $serverSubset ] || echo $menuList
+}
+
+# Reset all global settings. Command line switches are unaffected
+
+factoryReset () {
+  OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
+  OptionJarDir=$DEFAULT_OPTION_JAR_DIR
+  OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
+  OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
+
+  saveConfig
+  dialogMessageBox "Reset" "All global options have been reset."
+}
+
+# Convert HTML to plain text using sed. From left to right: Remove tags,
+# delete blank lines, insert one blank line after each paragraph, delete lines
+# with only spaces
+
+HTMLToText () {
+  sed -e 's/<[^>]*>//g' -e '/^$/d' -e 's/$/\n/' -e '/^\s*$/d'
+}
+
+# Snippet to remove some leftover script code from the Minecraft EULA
+
+HTMLEULAFilter () {
+  sed -e '/^\s*$/d' -e '/EULA | Minecraft/,/}(window);/d' -e '/.pageBottom/d'
+}
+
+# Show a message box dialog with title $1 and text $2
+
+dialogMessageBox () {
+  dialog $DIALOG_COMMON --title "$1" --msgbox "$2" $MESSAGEBOX_SIZE
+}
+
+# Show a simple titleless box with some text
+
+dialogInfoBox () {
+  dialog $DIALOG_COMMON --infobox "$*" $INFOBOX_SIZE
+}
+
+# Takes a command’s output and continually displays it in a box with text $1
+# until finished, then adds an ok button
+
+dialogProgramBox () {
+  dialog $DIALOG_COMMON --programbox "$1" $PROGRAM_BOX_SIZE
+}
+
+# Yes/No dialog with title $1 and text $2
+
+dialogYesNo () {
+  dialog $DIALOG_COMMON --title "$1" --yesno "$2" $DECISION_BOX_SIZE
+}
+
+# Ok/Cancel dialog with title $1 and text $2
+
+dialogOkCancel () {
+  dialog $DIALOG_COMMON --yes-label "Ok" --no-label "Cancel" --title "$1" --yesno "$2" $DECISION_BOX_SIZE
+}
+
+# Input dialog with title $1, text $2 and (optional) init $3
+
+dialogInput () {
+  dialog $DIALOG_COMMON_MIN --title "$1" --inputbox "$2" $INPUTBOX_SIZE "$3"
+}
+
+# Directory selection dialog with title $1 and starting directory $2
+
+dialogDirSelect (){
+  dialog $DIALOG_COMMON --title "$1" --dselect "$2" $DIR_SELECTOR_SIZE
+} 
+
+# Show the server list. $1 = "stable" for stable servers only, "installed" for
+# installed ones, otherwise "all".
+# $2 (optional) is the server type, for example "fabric"
+
+menuServerList () {
+  [ ! "$ServerVersionList" ] && dialogMessageBox "Server version list empty" "The list of server versions is null! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
+
+  serverSubset=$1
+  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  
+  case $serverSubset in
+    installed)
+      menuList=$ServerVersionListInstalled
+      howMany=$NumInstalledServerVersions ;;
+    stable)
+      menuList=$ServerVersionListStable
+      howMany=$NumStableServerVersions ;;
+    all)
+      menuList=$ServerVersionList
+      howMany=$NumServerVersions ;;
+    *)
+      return $FALSE;
+  esac
+  
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server selection ($serverSubset)" --menu \
+  "$howMany $serverType server(s) found. Select a server jar to download, manage or launch.\n\n \
+  I = installed, a = available, S = stable, u = unstable" \
+  $MAIN_MENU_SIZE \
+    $menuList
+    )
+
+    if [ "$choice" ]; then
+      isServerInstalled "$choice" "$serverType" && menuInstalledServer $choice || menuAvailableServer $choice
+    else
+      break
+    fi
+
+  done
+}
+
+# Menu for installed servers
+
+menuInstalledServer () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Installed server" --menu \
+  "Manage the $serverVersion ($serverType) server installation." \
+  $MAIN_MENU_SIZE \
+    "s" "Start server" \
+    "w" "World actions" \
+    "m" "Java memory" \
+    "p" "Edit $(textFormatEmphasis "server.properties")" \
+    "b" "Backup/restore" \
+    "c" "Erase cache" \
+    "u" "Uninstall"
+    )
+
+    case $choice in
+      s)
+        runServer $serverVersion $serverType ;;
+      w)
+        menuWorld $serverVersion $serverType ;;
+      m)
+        continue ;;
+      p)
+        continue ;;
+      b)      
+        continue ;;
+      c)
+        continue ;;
+      o)
+        continue ;;
+      u)
+        continue ;;
+      *)
+        break ;;
+    esac
+
+  done
+}
+
+# World menu for servers
+
+menuWorld () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server world on $serverType-$serverVersion" --menu \
+  "World $worldName (using $worldSize of storage)." \
+  $MAIN_MENU_SIZE \
+    "r" "Rename world" \
+    "m" "Move world" \
+    "b" "Backup/restore" \
+    "p" "Purge world" \
+    "d" "Delete world" # with or without directory
+    )
+
+    case $choice in
+      r)
+        continue ;;
+      m)
+        continue ;;
+      b)
+        continue ;;
+      p)
+        continue ;;
+      d)      
+        continue ;;
+      *)
+        break ;;
+    esac
+
+  done
+}
+
+# Menu for servers that are not installed
+
+menuAvailableServer () {
+  version=$1
+  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server menu" --menu \
+  "Options for downloadable servers." \
+  $MAIN_MENU_SIZE \
+    "i" "Download and install $version ($serverType)"
+    )
+
+    case $choice in
+      i)
+        downloadServer "$1" "$2" && break ;;
+      *)
+        break ;;
+    esac
+  done
+}
+
+# Global options menu
+
+menuGlobalOptions () {
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Global options" --menu \
+  "Global and default options; those marked with * can be overridden by individual server settings." \
+  $MAIN_MENU_SIZE \
+    "m" "Java memory *" \
+    "j" "Server jar root folder" \
+    "w" "World root folder *" \
+    "e" "Default text editor" \
+    "i" "Install $APP_NAME" \
+    "u" "Uninstall $APP_NAME" \
+    "a" "Agree to the Minecraft EULA" \
+    "r" "Reset to default settings"
+    )
+
+    case $choice in
+      m)
+        optionUIJavaMemory ;;
+      j)
+        optionUIJarFolder ;;
+      w)
+        optionUIWorldFolder ;;
+      e)
+        optionUITextEditor ;;
+      i)
+        installScript ;;
+      u)
+        uninstallScript ;;
+      a)
+        optionUIAgreeToEULA ;;
+      r)
+        dialogYesNo "Options reset" "Revert all global settings to their defaults?" && factoryReset ;;
+      *)
+        break ;;
+    esac
+
+  done
+}
+
+# Configuration UI for Java memory
+
+optionUIJavaMemory () {
+  value=$(dialogInput "Java Memory" ‌"Default amount of RAM for servers (recommended 2G-16G):" $OptionJavaMemory)
+
+  if [ "$value" ]; then
+    OptionJavaMemory=$value
+    saveConfig
+  fi
+}
+
+# Input box for the server jar directory
+
+optionUIJarFolder () {
+  while true; do
+    
+    dir=$(dialogInput "Server jar directory" "Root directory for the server jar files:" $OptionJarDir)
+
+    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+      OptionJarDir=$dir
+      saveConfig
+      break
+    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+
+      if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
+
+        if mkdir -p $dir; then
+          OptionJarDir=$dir
+          saveConfig
+          dialogMessageBox "Success" "The directory $(textFormatEmphasis $dir) has been created."
+          break
+        else
+          dialogMessageBox "Error" "The directory $(textFormatEmphasis $dir) could not be created."
+        fi
+      fi
+      
+    elif [ -z "$dir" ]; then
+      break
+    fi
+    
+  done
+}
+
+# Input box for the world directory
+
+optionUIWorldFolder () {
+  while true; do
+    
+    dir=$(dialogInput "World directory" "Default root directory for the world files:" $OptionWorldDir)
+
+    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+      OptionWorldDir=$dir
+      saveConfig
+      break
+    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+
+      if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
+
+        if mkdir -p $dir; then
+          OptionWorldDir=$dir
+          saveConfig
+          dialogMessageBox "Success" "The directory $(textFormatEmphasis $dir) has been created."
+          break
+        else
+          dialogMessageBox "Error" "The directory $(textFormatEmphasis $dir) could not be created."
+        fi
+      fi
+      
+    elif [ -z "$dir" ]; then
+      break
+    fi
+    
+  done
+}
+
+# Input box for the text editor to use
+
+optionUITextEditor () {
+  editor=
+  
+  dialogYesNo "Editor detection" "Would you like to autodetect the editor?" && editor=$(detectTextEditor)
+  [ "$editor" ] || editor=$OptionTextEditor
+
+  while true; do
+    editor=$(dialogInput "Text editor" "Text editor to use:" $editor)
+
+    if [ "$editor" ]; then
+      OptionTextEditor=$editor
+      saveConfig
+      break
+    else
+      break
+    fi
+
+  done
+
+  echo $editor
+}
+
+# Ask the user to agree with the Minecraft EULA
+
+optionUIAgreeToEULA () {
+  agreed=$OptionAgreedToEULA
+  
+  if [ $agreed = "true" ]; then
+    dialogMessageBox "EULA" "You already agreed to the Minecraft EULA."
+  else
+    if dialogYesNo "EULA" "Do you agree to the Minecraft EULA?\n$EULA_URL"; then
+      OptionAgreedToEULA="true"
+      dialogMessageBox "EULA" "Agreement acknowledged. You can now start servers."
+    else
+      dialogMessageBox "EULA" "You need to agree to the Minecraft EULA before you can start a server."
+    fi
+  fi
+  
+  writeConfigKey $CONFIG_FILE $AgreedToEULAKey $OptionAgreedToEULA
+}
+
+# Install the script file to the local bin directory. Optionally also install
+# a desktop entry
+
+installScript () {
+  dialogYesNo "Script installation" "Install the $(textFormatEmphasis $SCRIPT_NAME) script to $(textFormatEmphasis $BIN_DIR)?" || return
+  
+  if [ ! $(echo $PATH | grep $BIN_DIR) ]; then
+    dialogYesNo "Path error" "$(textFormatEmphasis $BIN_DIR) is not in your PATH variable! Install anyway?" || return $FALSE
+  fi
+
+  cp -fp $0 $BIN_DIR
+  dialogMessageBox "Installation successful" "Script installed. You can now start $APP_NAME by typing $(textFormatEmphasis $SCRIPT_NAME) anywhere."
+
+  # Optionally install a desktop entry if desktop-file-utils is installed
+  
+  desktopAssetsDir="$(pwd)/desktop"
+  
+  if fileExistsRegular "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop" &&
+     fileExistsRegular "$desktopAssetsDir/$SCRIPT_NAME.svg" &&
+     fileExistsRegular "$desktopAssetsDir/$SCRIPT_NAME.png"&&
+     command -v "desktop-file-install"; then
+
+      if dialogYesNo "Desktop entry" "Do you also want to install a desktop icon and menu entry?"; then
+        mkdir -p $APPS_DIR "$ICON_THEME_DIR/scalable" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS
+        cp -f "$desktopAssetsDir/$SCRIPT_NAME.svg" "$ICON_THEME_DIR/scalable/apps"
+        cp -f "$desktopAssetsDir/$SCRIPT_NAME.png" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS"/apps"
+        desktop-file-install --dir="$APPS_DIR" "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop"
+        
+        dialogMessageBox "Installation successful" "Desktop file and icons have been installed."
+      fi
+
+  else
+    return
+  fi
+}
+
+# Remove the installed script and desktop entry from the system
+
+uninstallScript () {
+  if ! fileExists "$BIN_DIR/$SCRIPT_NAME"; then
+    dialogMessageBox "No installation found" "The script is not installed."
+    return
+  fi
+
+  dialogYesNo "Uninstall script" "Remove the $APP_NAME installation from your system?" || return
+
+  rm -f "$ICON_THEME_DIR/scalable/$SCRIPT_NAME.svg"
+  rm -f "$ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS/$SCRIPT_NAME.png"
+  rm -f "$APPS_DIR/com.$MAINTAINER.$APP_NAME.desktop"
+
+  rm -f "$BIN_DIR/$SCRIPT_NAME"
+
+  command -v update-desktop-database && update-desktop-database
+
+  dialogMessageBox "Uninstall successful" "Desktop file and icons have been removed."
+
+  # TODO: Offer to also remove some of the generated directories
+}
+
+# Load the global settings from the configuration file
+
+loadConfig () {
+  OptionJarDir=$(readConfigKey $CONFIG_FILE $JarDirKey $DEFAULT_OPTION_JAR_DIR)
+  OptionWorldDir=$(readConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR)
+  OptionJavaMemory=$(readConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY)
+  OptionTextEditor=$(readConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR)
+  OptionAgreedToEULA=$(readConfigKey $CONFIG_FILE $AgreedToEULAKey $DEFAULT_OPTION_AGREED_TO_EULA)
+}
+
+# Saves the configuration file
+
+saveConfig () {
+  echo $CONFIG_HEADER > $CONFIG_FILE
+
+  writeConfigKey $CONFIG_FILE $JarDirKey $OptionJarDir
+  writeConfigKey $CONFIG_FILE $WorldDirKey $OptionWorldDir
+  writeConfigKey $CONFIG_FILE $JavaMemoryKey $OptionJavaMemory
+  writeConfigKey $CONFIG_FILE $TextEditorKey $OptionTextEditor
+  writeConfigKey $CONFIG_FILE $AgreedToEULAKey $OptionAgreedToEULA
+}
+
+# Write the config file with the defaults
+
+writeDefaultConfig () {
+  dialogMessageBox "Initial configuration" "No configuration file was found; creating one in $(textFormatEmphasis $CONFIG_DIR)."
+
+  echo $CONFIG_HEADER > $CONFIG_FILE
+
+  writeConfigKey $CONFIG_FILE $JarDirKey $DEFAULT_OPTION_JAR_DIR
+  writeConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR
+  writeConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY
+  writeConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR
+  writeConfigKey $CONFIG_FILE $AgreedToEULAKey $DEFAULT_OPTION_AGREED_TO_EULA
+}
+
+# Read the value of a key=value pair from a configuration file.
+# $1=file, $2=key, $3=default value (optional)
+
+readConfigKey () {
+  file=$1; key=$2; defaultValue=$3; value=
+
+  ! fileAccessible $file && touch $file # Make sure the file exists
+
+  #value=$(sed -e '|^#|!s| ||g' $file | grep -e "^$key=.*" | cut -d "=" -f 2)
+  value=$(grep -e "^$key=.*" $file | sed -e 's| ||g' | cut -d "=" -f 2)
+  [ "$value" ] || value=$defaultValue
+
+  echo $value
+}
+
+# Write a key=value pair to a configuration file.
+# $1=file, $2=key, $3=value
+
+writeConfigKey () {
+  file=$1; key=$2; value=$3
+
+  touch $file
+  
+  if fileAccessible $file; then # The file is there and we can read and write
+    # Many non-GNU seds cannot modify data in-place, hence we need a tempfile
+
+    #sed -e '|^#|!s| ||g' $file > $TMP_FILE # Sanitize the file and copy to /tmp
+    cp -f $file $TMP_FILE
+
+    if grep -e "^$key=.*" $TMP_FILE; then # Is the key in the file?
+    
+      if grep -e "^$key=$value$" $TMP_FILE; then
+        return # Same value, outta here
+      else
+        #sed -e "s|^$key=.*|$key=$value|g" $file >> $TMP_FILE # Update value
+        sed -e "s|\($key *= *\).*|\1$value|g" $file > $TMP_FILE
+      fi 
+
+    else
+      echo "$key=$value" >> $TMP_FILE # Key-value pair not present, append
+    fi
+
+    mv -f $TMP_FILE $file # Update the file with the changes
+  
+  else # File not accessible or nonexistent
+    dialogMessageBox "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
+    exit 1
+  fi
+}
+
+# Return true if we have internet connectivity
+
+online () {
+  ping -c 1 $PING_IP | grep -q "0%" >/dev/null
+}
+
+# A small wrapper around the ‘online’ function that displays $* as a message.
+
+onlineWarning () {
+  online && return $TRUE
+  
+  dialogMessageBox "No internet connectivity" "$*"
+  
+  return $FALSE
+}
+
+# Download and initialize the server of version $1 and (optionally) type $2
+
+downloadServer () {
+  matchFile="$LIST_CACHE_DIR/$SERVER_TYPE-loadermatch"
+
+  serverVersion="$1"
+  anyLoader=; stableLoader=
+  installer=
+
+  serverType=
+  loaderJSON=
+
+  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
+  
+  dialogInfoBox "Finding the best loader for $serverVersion ($serverType) …"
+
+  download $CURL_OPTIONS_USER_AGENT "$FABRIC_API_URL/versions/loader/$serverVersion" > $matchFile
+
+  loaderJSON=$(cat $matchFile)
+  [ ! "$loaderJSON" ] && dialogMessageBox "Transmission error" "The loader match data could not be obtained." && return 1
+
+  numLoaderVersions=$(echo $loaderJSON | jq ". | length")
+
+  # Default to the newest loader whether stable or unstable
+  
+  anyLoader=$(echo $loaderJSON | jq -r ".[0].loader.version")
+
+  # Then look for the newest stable loader
+
+  stableLoader=; l="0"
+  
+  while [ $l -lt $numLoaderVersions ]; do
+  
+    stableLoader=$(echo $loaderJSON | jq -r ".[$l].loader.version")
+    isStable=$(echo $loaderJSON | jq -r ".[$l].loader.stable")
+  
+    [ "$isStable" = "true" ] && break;
+    
+    l=$(($l + 1))
+  done
+  
+  if [ "$anyLoader" = "$stableLoader" ]; then
+    dialogInfoBox "Finding the best loader for $serverVersion ($serverType) … $stableLoader."
+    sleep $INFO_DELAY
+    loader=$stableLoader
+  else
+    dialogInfoBox "Finding the best loader for $serverVersion ($serverType) … several matches."
+    dialogYesNo "Several loader matches" "Would you like to install the newer $(textFormatEmphasis "unstable") loader version $(textFormatEmphasis "$anyLoader") rather than the stable $(textFormatEmphasis "$stableLoader")? This is rather not recommended if you are running a stable server version." && loader=$anyLoader || loader=$stableLoader
+  fi
+
+  installerJSON=$(cat $INSTALLER_VER_FILE)
+  [ ! "$installerJSON" ] && dialogMessageBox "Transmission error" "The installer data could not be obtained." && return $FALSE
+  installer=$(echo $installerJSON | jq -r ".[0].version")
+  
+  dialogInfoBox "Creating directories …"
+  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  mkdir -p $serverDir
+
+  dialogInfoBox "Downloading $serverType server $serverVersion …"
+  download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
+
+  initServer $serverVersion $serverType
+}
+
+# Start the server without eula.txt so it is forced to initialize and exit
+
+initServer () {
+  serverVersion="$1"
+  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
+
+  dialogInfoBox "Initializing Server …"
+  
+  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  cd $serverDir
+  
+  # We want the server to init and then exit on first start
+  
+  rm -f eula.txt
+  
+  resetTerminal
+    
+  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar"
+
+  # Write whether we have agreed to the EULA into the text file
+  
+  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
+  cd $SCRIPT_DIR
+
+  waitForEnter "return to the launcher"
+  resetTerminal
+  
+  menuInstalledServer $serverVersion $serverType
+}
+
+# Run the server of version $1 and (optionally) type $2
+
+runServer () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+
+  if dialogOkCancel "Launching server" "Launching '$(textFormatEmphasis $serverVersion \($serverType\))'. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
+    resetTerminal
+
+    download ipinfo.io
+
+    waitForEnter "return to the launcher"
+    resetTerminal
+  fi
+}
+
+help() {
+  echo \
+"$APP_NAME $APP_VER – 2025-$(date +%Y), originally created by Dennis Murczak
+<https://github.com/lortordermur>
+
+Usage: $SCRIPT_NAME <arg>
+
+  -n, --no-auto-cache
+  Prevents $APP_NAME from automatically refreshing the API cache on startup.
+  It can still be refreshed manually from the main menu. Useful for systems
+  that are not always connected to the internet.
+  -k, --kickstart
+  Directly run the latest installed server. This skips all interaction; when
+  a newer server than any installed one is available online, it is downloaded
+  and started. Without an internet connection the most recent installed
+  server is started.
+  -h, --help
+  This help screen."
+  
+  # TODO:
+  # -r, --run <version> [type]
+  # -l, --run-latest [type]
+  # -b, --backup <version> [type]
+}
+
+# Get and process the command line parameters
+
+processArguments () {
+  while [ "$1" ]; do
+    # TODO: Shift the parameters so we can combine them
+    case $1 in
+      -n|--no-auto-cache)
+        AUTO_CACHE=$FALSE ;;
+      -k|--kickstart)
+        KICKSTART=$TRUE ;;
+      -h|--help)
+        help
+        exit 0;;
+      *)
+        echo "Unknown parameter! Try --help"
+        exit 1 ;;
+    esac
+    
+    shift
+  done
+}
+
+# Stuff to do before showing the main menu
+
+init () {
+  
+  # Set up logging of stderr to log file while still seeing it onscreen
+  # FIXME: Actually make it work
+
+  # exec >> $LOG_FILE 2>&1 # Logs to $LOG_FILE‌ only without TTY‌ output
+
+  exec 2>&1 | tee -a $LOG_FILE # Creates 0 byte logfile
+
+  # Create the default directories
+  
+  mkdir -p $CONFIG_DIR $LIST_CACHE_DIR $DOCS_CACHE_DIR $OptionJarDir $OptionWorldDir
+
+  # Write a default configuration file if there is none
+
+  fileAccessible $CONFIG_FILE || writeDefaultConfig
+
+  # Load the global options and defaults
+
+  fileExists $CONFIG_FILE && loadConfig
+  
+  # Update the API cache if necessary
+
+  onlineWarning "It seems there is no internet connection. Some functionality will be limited."
+  
+  [ $AUTO_CACHE ] && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
+  
+  buildServerLists
+  
+  #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
+}
+
+# Stuff to do on script exit
+
+unInit () {
+  saveConfig
+  exit 0
+}
+
+################
+# Main program #
+################
+
+# Evaluate the command line
+  
+processArguments $@
+
+# Check for the UI toolkit
+
+if [ ! $(command -v dialog) ]; then
+  echo "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
+  exit 1
+fi
+
+# Prepare dialogrc pre-init for a custom color scheme
+# Drop a dialogrc named ‘color’ there to customize the appearance
+
+export DIALOGRC="$CONFIG_DIR/colors"
+
+# Root check
+
+if [ $(id -u) = 0 ]; then
+  dialogMessageBox "Root detected" "Running a game server as root $(textFormatError "is a bad idea"). Exiting."
+  exit 1
+fi
+
+# Software dependency checks
+
+checkCommandExists "java" "default-jre-headless"
+checkCommandExists "curl" "curl"
+checkCommandExists "jq" "jq"
+
+# Prepare everything
+
+init
+
+# Main menu loop
+
+while true; do
+  choice=$(
+  dialog $DIALOG_COMMON --no-cancel --erase-on-exit --title "Main menu" --menu \
+"Welcome to $APP_NAME – $APP_DESC\n\n \
+Launcher version: $APP_VER on $(getDesktop)/$(uname -sm)\n \
+Java version: $(getJavaVersion)\n \
+Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion)\n" \
+$MAIN_MENU_SIZE \
+    "r" "Run latest stable server" \
+    "i" "Installed servers" \
+    "s" "Available servers (stable)" \
+    "a" "Available servers (all)" \
+    "u" "Force update list cache" \
+    "o" "Global options" \
+    "x" "Exit $APP_NAME"
+    )
+  
+  case $choice in
+    r)
+      runServer $(getLatestStableServerVersion) ;;
+    i)
+      menuServerList "installed" ;;
+    s)
+      menuServerList "stable" ;;
+    a)
+      menuServerList "all" ;;
+    u)
+      onlineWarning "Cannot update the list cache without an internet connection." && cacheFabricMeta
+      buildServerLists ;;
+    o)
+      menuGlobalOptions ;;
+    *)
+      break ;;
+  esac
+done
+
+unInit

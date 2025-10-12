@@ -1,0 +1,18 @@
+[Desktop Entry]
+Categories=Game;X-GameTool;ConsoleOnly;
+Comment[de_DE]=Minecraft Java server launcher
+Comment=Minecraft Java server launcher
+Exec=mcserveme
+GenericName[de_DE]=
+GenericName=
+Icon=mcserveme
+MimeType=
+Name[de_DE]=MCServeMe
+Name=MCServeMe
+Path=
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-KDE-SubstituteUID=false
+X-KDE-Username=
