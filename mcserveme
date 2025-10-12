@@ -494,7 +494,8 @@ cacheEULA () {
 # Build a server list from the list caches.
 # $1 is the subset of servers to echo to stdout (installed, stable or all).
 # $2 is the server type.
-# Returns a list of servers to be passed to a menu-type dialog.
+# The results are stored in the global server lists:
+# ServerVersionList, ServerVersionListStable and ServerVersionListInstalled
 
 buildServerLists () {
   ! fileExists $GAME_VER_FILE && dialogMessageBox "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
@@ -558,9 +559,6 @@ buildServerLists () {
     all)
       menuList=$ServerVersionList ;;
   esac
-
-  # Suppress output if called without arguments
-  [ -z $serverSubset ] || echo $menuList
 }
 
 # Reset all global settings. Command line switches are unaffected
