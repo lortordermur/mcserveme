@@ -325,7 +325,7 @@ textFormatEmphasis () {
 
 errorExit () {
   echo "\033[1;31m$@\033[0m" 1>&2
-  exit 1
+  exit $FALSE
 }
 
 # Follow a symlink chain starting with $1, which must be an executable (the
@@ -367,7 +367,7 @@ checkCommandExists () {
       dialogMessage "Required dependency missing" "$errorText"
     fi
 
-    exit 1
+    exit $FALSE
   fi
 }
 
@@ -556,7 +556,7 @@ cacheFabricMeta () {
   
   if [ ! -s "$GAME_VER_FILE" ] && fileExists $GAME_VER_FILE; then
     dialogMessage "Caching error" "There was a problem updating the game version list! Exiting."
-    exit 1
+    exit $FALSE
   fi
   
   dialogInfo "Caching loader versions …"
@@ -564,7 +564,7 @@ cacheFabricMeta () {
 
   if [ ! -s "$LOADER_VER_FILE" ] && fileExists $LOADER_VER_FILE; then
     dialogMessage "Caching error" "There was a problem updating the loader list! Exiting."
-    exit 1
+    exit $FALSE
   fi
 
   dialogInfo "Caching installer versions …"
@@ -572,7 +572,7 @@ cacheFabricMeta () {
   
   if [ ! -s "$INSTALLER_VER_FILE" ] && fileExists $INSTALLER_VER_FILE; then
     dialogMessage "Caching error" "There was a problem updating the installer list! Exiting."
-    exit 1
+    exit $FALSE
   fi
 }
 
@@ -1195,8 +1195,12 @@ writeConfigKey () {
     mv -f $TMP_FILE $file # Update the file with the changes
   
   else # File not accessible or nonexistent
-    dialogMessage "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
-    exit 1
+    if [ $KICKSTART = $TRUE ]; then
+      errorExit "ERROR: No write access to configuration file!"
+    else
+      dialogMessage "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
+      exit $FALSE
+    fi
   fi
 }
 
@@ -1318,7 +1322,8 @@ initServer () {
 
   waitForEnter "return to the launcher"
   resetTerminal
-  
+
+  buildServerLists
   menuInstalledServer $serverVersion $serverType
 }
 
@@ -1328,7 +1333,7 @@ runServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
 
-  if dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
+  if [ $KICKSTART = $TRUE ] || dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
     resetTerminal
 
     download ipinfo.io
@@ -1375,10 +1380,10 @@ processArguments () {
         KICKSTART=$TRUE ;;
       -h|--help)
         help
-        exit 0;;
+        exit $TRUE ;;
       *)
         echo "Unknown parameter! Try --help"
-        exit 1 ;;
+        exit $FALSE ;;
     esac
     
     shift
@@ -1390,11 +1395,10 @@ processArguments () {
 init () {
   
   # Set up logging of stderr to log file while still seeing it onscreen
-  # FIXME: Actually make it work
 
-  # exec >> $LOG_FILE 2>&1 # Logs to $LOG_FILE‌ only, without TTY‌ output
+  # exec >> $LOG_FILE 2>&1 # FIXME: Logs stderr to $LOG_FILE‌ only, without TTY‌ output
 
-  exec 2>&1 | tee -a $LOG_FILE # Creates 0 byte logfile
+  exec 2>> $LOG_FILE 2>&1 # FIXME: Creates a 0 byte logfile
 
   # Create the default directories
   
@@ -1418,22 +1422,26 @@ init () {
   
   #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
 
-  [ $KICKSTART = $TRUE ] && kickStart
+  if [ $KICKSTART = $TRUE ]; then
+    dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no questions asked."
+    sleep $INFO_DELAY
+    kickStart
+  fi
 }
 
 # Do the kickstart
 
 kickStart () {
   lssv=$(getLatestStableServerVersion)
-  $? && lssv=$(getLatestInstalledServerVersion)
-  $? && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
+  [ -z $lssv ] && lssv=$(getLatestInstalledServerVersion)
+  [ $lssv ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
 }
 
 # Stuff to do on script exit
 
 unInit () {
   saveConfig
-  exit 0
+  exit $TRUE
 }
 
 ################
@@ -1448,7 +1456,7 @@ processArguments $@
 
 if [ ! $(command -v dialog) ]; then
   echo "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
-  exit 1
+  exit $FALSE
 fi
 
 # Prepare dialogrc pre-init for a custom color scheme
@@ -1460,7 +1468,7 @@ export DIALOGRC="$CONFIG_DIR/colors"
 
 if [ $(id -u) = 0 ]; then
   dialogMessage "Root detected" "Running a game server as root $(textFormatError "is a bad idea"). Exiting."
-  exit 1
+  exit $FALSE
 fi
 
 # Software dependency checks
