@@ -173,7 +173,7 @@ AgreedToEULAKey="agreed-to-eula"
 # Common dialog options
 
 NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
-INFO_DELAY="2" # A somewhat longer delay for infobox chains
+INFO_DELAY="2.5" # A somewhat longer delay for infobox chains
 DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 
@@ -423,10 +423,42 @@ isServerInstalled () {
   fileExists "$OptionJarDir/$prefix/$prefix.jar" && return $TRUE || return $FALSE
 }
 
-# Get the version of latest server jar
+# Compare $1 and $2 server version, return true if $1 is newer. $3 (optional)
+# is the server type
+
+isServerVersionNewer () {
+  ! fileAccessible $GAME_VER_FILE && return $FALSE
+  
+  serverListJSON=$(cat $GAME_VER_FILE)
+  NumServerVersions=$(echo $serverListJSON | jq ". | length")
+
+  lhs=; rhs=
+  
+  serverCounter="0"
+
+  while [ "$serverCounter" -lt "$NumServerVersions" ]; do
+    server=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+
+    server=$1 && lhs=$serverCounter
+    server=$2 && rhs=$serverCounter
+
+    serverCounter=$((serverCounter + 1))
+    
+  done
+
+  if [ $lhs ] && [ $rhs ]; then
+    [ $lhs -gt $rhs ] && return $TRUE
+  fi
+  
+  return $FALSE
+}
+
+# Get the version of latest server jar, whether stable or not. $1 (optional)
+# signifies the server type
 
 getLatestServerVersion () { 
   if online; then
+    fileAccessible $GAME_VER_FILE || return $FALSE;
     echo $(cat $GAME_VER_FILE | jq -r ".[0].version")
     return $TRUE
   else
@@ -444,6 +476,8 @@ getLatestStableServerVersion () {
     return $FALSE
   fi
 
+  ! fileAccessible $GAME_VER_FILE && echo "unknown" && return $FALSE
+  
   serverListJSON=$(cat $GAME_VER_FILE)
   NumServerVersions=$(echo $serverListJSON | jq ". | length")
 
@@ -461,6 +495,31 @@ getLatestStableServerVersion () {
     
   done
   
+  echo "unknown"
+  return $FALSE
+}
+
+# Return the latest installed server, whether stable or not. A supplied $1
+# signifies the server type.
+
+getLatestInstalledServerVersion () {
+  serverType=$1
+
+  [ -z $serverType ] && serverType=$DEFAULT_SERVER_TYPE
+  ! fileAccessible $GAME_VER_FILE && echo "unknown" &&‌ return $FALSE
+  
+  serverListJSON=$(cat $GAME_VER_FILE)
+  NumServerVersions=$(echo $serverListJSON | jq ". | length")
+
+  serverCounter="0"
+
+  while [ "$serverCounter" -lt "$NumServerVersions" ]; do
+    version=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+    isServerInstalled $version $serverType && echo $version && return $TRUE
+
+    serverCounter=$((serverCounter + 1))
+  done
+
   echo "unknown"
   return $FALSE
 }
@@ -837,6 +896,13 @@ menuGlobalOptions () {
   done
 }
 
+# Sub-menu of global options: How to proceed when a newer server is being
+# installed
+
+radioServerUpgradeBehavior () {
+  return
+}
+
 # Configuration UI for Java memory
 
 optionUIJavaMemory () {
@@ -1169,7 +1235,10 @@ downloadServer () {
   download $CURL_OPTIONS_USER_AGENT "$FABRIC_API_URL/versions/loader/$serverVersion" > $matchFile
 
   loaderJSON=$(cat $matchFile)
-  [ ! "$loaderJSON" ] && dialogMessage "Transmission error" "The loader match data could not be obtained." && return 1
+  if [ ! "$loaderJSON" ]; then
+    [ $KICKSTART = $FALSE ] && dialogMessage "Transmission error" "The loader match data could not be obtained."
+    return $FALSE
+  fi
 
   numLoaderVersions=$(echo $loaderJSON | jq ". | length")
 
@@ -1197,7 +1266,13 @@ downloadServer () {
     loader=$stableLoader
   else
     dialogInfo "Finding the best loader for $serverVersion ($serverType) … several matches."
-    dialogYesNo "Several loader matches" "Would you like to install the newer $(textFormatEmphasis "unstable") loader version $(textFormatEmphasis "$anyLoader") rather than the stable $(textFormatEmphasis "$stableLoader")? This is rather not recommended if you are running a stable server version." && loader=$anyLoader || loader=$stableLoader
+
+    if [ $KICKSTART = $FALSE ]; then
+      dialogYesNo "Several loader matches" "Would you like to install the newer $(textFormatEmphasis "unstable") loader version $(textFormatEmphasis "$anyLoader") rather than the stable $(textFormatEmphasis "$stableLoader")? This is rather not recommended if you are running a stable server version." && loader=$anyLoader || loader=$stableLoader
+    else
+      loader=$stableLoader # Prefer stable versions in kickstart
+    fi
+  
   fi
 
   installerJSON=$(cat $INSTALLER_VER_FILE)
@@ -1212,9 +1287,8 @@ downloadServer () {
   download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
 
   initServer $serverVersion $serverType
+  buildServerLists # FIXME: Server shown with “not installed” letters after first launch
 }
-
-# Start the server without eula.txt so it is forced to initialize and exit
 
 # TODO:‌ Make this non-interactive if the script was kickstarted, but only if
 # the user has globally agreed to the EULA
@@ -1228,17 +1302,17 @@ initServer () {
   serverDir="$OptionJarDir/$serverType-server-$serverVersion"
   cd $serverDir
   
-  # We want the server to init and then exit on first start
+  # We want the server to init and then exit on first start if the EULA has
+  # not been agreed to.
   
   rm -f eula.txt
+  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
   
   resetTerminal
     
   java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar" nogui
 
   # Write whether we have agreed to the EULA into the text file
-  
-  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
 
   cd $SCRIPT_DIR
 
@@ -1275,11 +1349,11 @@ Usage: $SCRIPT_NAME <arg>
   Prevents $APP_NAME from automatically refreshing the API cache on startup.
   It can still be refreshed manually from the main menu. This is useful for
   systems that are not always connected to the internet.
-  -k, --kickstart [version] [type]
-  Directly run the latest installed or the specified server version and exit
-  afterwards. This skips all interaction except a pending EULA agreement. If
-  no server is installed and an internet connection is available, the latest
-  stable server is downloaded and launched.
+  -k, --kickstart [type]
+  Directly run the latest stable server version–downloading, installing and
+  initializing it if necessary–and exit afterwards. This skips all user
+  interaction except a pending EULA agreement, in which case it quits with an
+  error message.
   -h, --help
   This help screen."
   
@@ -1318,7 +1392,7 @@ init () {
   # Set up logging of stderr to log file while still seeing it onscreen
   # FIXME: Actually make it work
 
-  # exec >> $LOG_FILE 2>&1 # Logs to $LOG_FILE‌ only without TTY‌ output
+  # exec >> $LOG_FILE 2>&1 # Logs to $LOG_FILE‌ only, without TTY‌ output
 
   exec 2>&1 | tee -a $LOG_FILE # Creates 0 byte logfile
 
@@ -1351,10 +1425,8 @@ init () {
 
 kickStart () {
   lssv=$(getLatestStableServerVersion)
+  $? && lssv=$(getLatestInstalledServerVersion)
   $? && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
-  
-  #if ! isServerInstalled "$lssv"; then
-  #fi
 }
 
 # Stuff to do on script exit
@@ -1409,7 +1481,7 @@ while true; do
 "Welcome to $APP_NAME – $APP_DESC\n\n \
 Launcher version: $APP_VER on $(getDesktop)/$(uname -sm)\n \
 Java version: $(getJavaVersion)\n \
-Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion)\n" \
+Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion), installed: $(getLatestInstalledServerVersion)\n" \
 $MAIN_MENU_SIZE \
     "r" "Run latest stable server" \
     "i" "Installed servers" \
