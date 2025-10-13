@@ -1043,6 +1043,17 @@ writeDefaultConfig () {
   writeConfigKey $CONFIG_FILE $AgreedToEULAKey $DEFAULT_OPTION_AGREED_TO_EULA
 }
 
+factoryReset () {
+  OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
+  OptionJarDir=$DEFAULT_OPTION_JAR_DIR
+  OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
+  OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
+  OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
+
+  saveConfig
+  dialogMessageBox "Reset" "All global options have been reset."
+}
+
 # Read the value of a key=value pair from a configuration file.
 # $1=file, $2=key, $3=default value (optional)
 
