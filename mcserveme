@@ -111,6 +111,11 @@ CACHE_DIR="$USER_DIR/.cache/$APP_NAME"
 LIST_CACHE_DIR="$CACHE_DIR/lists"
 DOCS_CACHE_DIR="$CACHE_DIR/docs"
 
+# Some basic files for install/uninstall
+
+README_FILE="README.md"
+LICENSE_FILE="LICENSE"
+
 # Other caches
 
 EULA_CACHE_INTERVAL="86400" # seconds
@@ -172,8 +177,8 @@ DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 # Default dialog sizes
 
 MAIN_MENU_SIZE="22 78 22"
-INFOBOX_SIZE="5 60"
-MESSAGEBOX_SIZE="7 60"
+INFOBOX_SIZE="6 60"
+MESSAGEBOX_SIZE="8 60"
 DECISION_BOX_SIZE="9 50"
 PROGRAM_BOX_SIZE="-2 -2"
 INPUTBOX_SIZE="7 60"
@@ -287,6 +292,12 @@ fileAccessible () {
 
 fileLastModified () {
   echo $(stat -c %Y "$1")
+}
+
+# Check if directory $1 is empty
+
+directoryEmpty () {
+  [ -z $(ls -A $1) ]
 }
 
 # Seconds since the epoch
@@ -546,18 +557,6 @@ buildServerLists () {
     ServerVersionList="$ServerVersionList$installedChar$stableChar "
     serverCounter=$((serverCounter + 1))
   done
-}
-
-# Reset all global settings. Command line switches are unaffected
-
-factoryReset () {
-  OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
-  OptionJarDir=$DEFAULT_OPTION_JAR_DIR
-  OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
-  OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
-
-  saveConfig
-  dialogMessageBox "Reset" "All global options have been reset."
 }
 
 # Convert HTML to plain text using sed. From left to right: Remove tags,
@@ -930,18 +929,33 @@ optionUIAgreeToEULA () {
 # a desktop entry
 
 installScript () {
-  dialogYesNo "Script installation" "Install the $(textFormatEmphasis $SCRIPT_NAME) script to $(textFormatEmphasis $BIN_DIR)?" || return
+  # Check if we are running an installed version
+  [ $SCRIPT_DIR = $BIN_DIR ] && dialogMessageBox "Path error" "The $APP_NAME script is already installed. Please uninstall it first." && return $FALSE
+  
+  dialogYesNo "$APP_NAME installation" "Install the $(textFormatEmphasis $SCRIPT_NAME) script to $(textFormatEmphasis $BIN_DIR)?" || return
   
   if [ ! $(echo $PATH | grep $BIN_DIR) ]; then
     dialogYesNo "Path error" "$(textFormatEmphasis $BIN_DIR) is not in your PATH variable! Install anyway?" || return $FALSE
   fi
 
+  dialogInfoBox "Installing the $APP_NAME script …"
+  
   cp -fp $0 $BIN_DIR
-  dialogMessageBox "Installation successful" "Script installed. You can now start $APP_NAME by typing $(textFormatEmphasis $SCRIPT_NAME) anywhere."
+  
+  dialogInfoBox "Installing the documentation …"
+
+  mkdir -p $LOCAL_DIR
+  cp -f $README_FILE $LICENSE_FILE $LOCAL_DIR
+  
+  dialogMessageBox "Installation successful" "Script and documentation have been installed. You can now start $APP_NAME by typing $(textFormatEmphasis $SCRIPT_NAME) anywhere."
 
   # Optionally install a desktop entry if desktop-file-utils is installed
   
-  desktopAssetsDir="$(pwd)/desktop"
+  # Check for the desktop assets under the script directory and the current directory
+
+  desktopAssetsDir="$SCRIPT_DIR/desktop"
+  [ ! -d $desktopAssetsDir ] && desktopAssetsDir="$(pwd)/desktop"
+  [ ! -d $desktopAssetsDir ] && return
   
   if fileExistsRegular "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop" &&
      fileExistsRegular "$desktopAssetsDir/$SCRIPT_NAME.svg" &&
@@ -949,12 +963,14 @@ installScript () {
      command -v "desktop-file-install"; then
 
       if dialogYesNo "Desktop entry" "Do you also want to install a desktop icon and menu entry?"; then
+        dialogInfoBox "Installing desktop file and icons …"
+
         mkdir -p $APPS_DIR "$ICON_THEME_DIR/scalable" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS
         cp -f "$desktopAssetsDir/$SCRIPT_NAME.svg" "$ICON_THEME_DIR/scalable/apps"
         cp -f "$desktopAssetsDir/$SCRIPT_NAME.png" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS"/apps"
         desktop-file-install --dir="$APPS_DIR" "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop"
         
-        dialogMessageBox "Installation successful" "Desktop file and icons have been installed."
+        dialogMessageBox "Installation successful" "The desktop assets have been installed."
       fi
 
   else
@@ -962,7 +978,7 @@ installScript () {
   fi
 }
 
-# Remove the installed script and desktop entry from the system
+# Remove the installed script and desktop entries from the system
 
 uninstallScript () {
   if ! fileExists "$BIN_DIR/$SCRIPT_NAME"; then
@@ -970,19 +986,25 @@ uninstallScript () {
     return
   fi
 
-  dialogYesNo "Uninstall script" "Remove the $APP_NAME installation from your system?" || return
+  dialogYesNo "Uninstall $APP_NAME" "Remove the $APP_NAME installation from your system?" || return
 
   rm -f "$ICON_THEME_DIR/scalable/$SCRIPT_NAME.svg"
   rm -f "$ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS/$SCRIPT_NAME.png"
   rm -f "$APPS_DIR/com.$MAINTAINER.$APP_NAME.desktop"
+  
+  rm -f "$LOCAL_DIR/$README_FILE" "$LOCAL_DIR/$LICENSE_FILE"
 
   rm -f "$BIN_DIR/$SCRIPT_NAME"
 
   command -v update-desktop-database && update-desktop-database
 
-  dialogMessageBox "Uninstall successful" "Desktop file and icons have been removed."
+  if directoryEmpty $LOCAL_DIR; then
+    rmdir $LOCAL_DIR
+  else
+    dialogMessageBox "Leftover data" "There is still some data, possibly server jars or worlds, left in $(textFormatEmphasis $LOCAL_DIR). You should look over those manually."
+  fi
 
-  # TODO: Offer to also remove some of the generated directories
+  dialogMessageBox "Uninstall successful" "$APP_NAME has been removed."
 }
 
 # Load the global settings from the configuration file
