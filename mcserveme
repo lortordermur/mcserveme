@@ -1243,13 +1243,13 @@ Usage: $SCRIPT_NAME <arg>
 
   -n, --no-auto-cache
   Prevents $APP_NAME from automatically refreshing the API cache on startup.
-  It can still be refreshed manually from the main menu. Useful for systems
-  that are not always connected to the internet.
-  -k, --kickstart
-  Directly run the latest installed server. This skips all interaction; when
-  a newer server than any installed one is available online, it is downloaded
-  and started. Without an internet connection the most recent installed
-  server is started.
+  It can still be refreshed manually from the main menu. This is useful for
+  systems that are not always connected to the internet.
+  -k, --kickstart [version] [type]
+  Directly run the latest installed or the specified server version and exit
+  afterwards. This skips all interaction except a pending EULA agreement. If
+  no server is installed and an internet connection is available, the latest
+  stable server is downloaded and launched.
   -h, --help
   This help screen."
   
