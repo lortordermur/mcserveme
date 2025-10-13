@@ -237,26 +237,32 @@ echo () {
 # Return the name of the OS kernel
 
 getKernel () {
-  OS=$(sysctl -n kern.ostype) # Unix-style
-  [ "$OS" ] || OS=$(sysctl -n kernel.ostype) # Linux-style
-  [ "$OS" ] || OS="unknown OS"
+                   kernel=$(uname -s) # POSIX-style
+  [ "$kernel" ] || kernel=$(sysctl -n kern.ostype) # Unix-style
+  [ "$kernel" ] || kernel=$(sysctl -n kernel.ostype) # Linux-style
+  [ "$kernel" ] || return $FALSE
 
-  echo $OS
+  echo $kernel
+}
+
+# Return the machine architecture
+
+getArch () {
+                 arch=$(uname -m) # POSIX-style
+  [ "$arch" ] || arch=$(sysctl -n kern.arch) # Unix-style
+  [ "$arch" ] || arch=$(sysctl -n kernel.arch) # Linux-style
+  [ "$arch" ] || return $FALSE
+  
+  echo $arch
 }
 
 # Return the type of graphical session, if any, as specifically as possible
 
 getDesktop () {
-  desktop=$XDG_SESSION_DESKTOP
-  [ $desktop ] || desktop="unknown DE"
-
-  session=$XDG_SESSION_TYPE
-
-  if [ $session = "tty" ]; then
-    desktop="TTY"
-    echo $desktop
-    return
-  fi
+                            desktop=$XDG_CURRENT_DESKTOP
+  [ "$desktop" ]         || desktop=$DESKTOP_SESSION
+  [ "$desktop" ]         || desktop=$XDG_SESSION_TYPE
+  [ "$desktop" = "tty" ] && desktop="TTY"
 
   echo $desktop
 }
@@ -1353,7 +1359,7 @@ runServer () {
     dialogInfo "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type $(textFormatEmphasis "/stop") in the console to shut down the server."
     sleep $LONG_DELAY
   else
-    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."
+    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
   fi
     
   resetTerminal
@@ -1514,7 +1520,7 @@ while true; do
   choice=$(
   dialog $DIALOG_COMMON --no-cancel --erase-on-exit --title "Main menu" --menu \
 "Welcome to $APP_NAME – $APP_DESC\n\n \
-Launcher version: $APP_VER on $(getDesktop)/$(uname -sm)\n \
+Launcher version: $APP_VER on $(getDesktop)/$(getKernel) $(getArch)\n \
 Java version: $(getJavaVersion)\n \
 Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion), installed: $(getLatestInstalledServerVersion)\n" \
 $MAIN_MENU_SIZE \
