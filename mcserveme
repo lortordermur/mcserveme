@@ -173,7 +173,8 @@ AgreedToEULAKey="agreed-to-eula"
 # Common dialog options
 
 NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
-INFO_DELAY="2.5" # A somewhat longer delay for infobox chains
+INFO_DELAY="3" # A somewhat longer delay for infobox chains
+LONG_DELAY=$(($INFO_DELAY * 2))
 DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 
@@ -321,6 +322,18 @@ textFormatEmphasis () {
   echo "\Z0\Zr $* \Zn"
 }
 
+# Convert spaces from stdin to no-break spaces.
+
+spaceToNBSP () {
+  sed "s| | |g"
+}
+
+# Convert no-break spaces from stdin to spaces.
+
+NBSPToSpace () {
+  sed "s| | |g"
+}
+
 # Non-interactive error-and-out message for kickstart.
 
 errorExit () {
@@ -437,7 +450,7 @@ isServerVersionNewer () {
   serverCounter="0"
 
   while [ "$serverCounter" -lt "$NumServerVersions" ]; do
-    server=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+    server=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
 
     server=$1 && lhs=$serverCounter
     server=$2 && rhs=$serverCounter
@@ -457,25 +470,15 @@ isServerVersionNewer () {
 # signifies the server type
 
 getLatestServerVersion () { 
-  if online; then
-    fileAccessible $GAME_VER_FILE || return $FALSE;
-    echo $(cat $GAME_VER_FILE | jq -r ".[0].version")
-    return $TRUE
-  else
-    echo "unknown"
-    return $FALSE
-  fi
+  fileAccessible $GAME_VER_FILE || return $FALSE;
+  echo $(cat $GAME_VER_FILE | jq -r ".[0].version")
+  return $TRUE
 }
 
 # Get the version of latest stable server jar, optionally provide $1 for the
 # server type
 
 getLatestStableServerVersion () {
-  if ! online; then
-    echo "unknown"
-    return $FALSE
-  fi
-
   ! fileAccessible $GAME_VER_FILE && echo "unknown" && return $FALSE
   
   serverListJSON=$(cat $GAME_VER_FILE)
@@ -487,7 +490,7 @@ getLatestStableServerVersion () {
     isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
     
     if [ $isStable = "true" ]; then
-      echo $(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+      echo $(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
       return $TRUE
     fi
 
@@ -514,7 +517,7 @@ getLatestInstalledServerVersion () {
   serverCounter="0"
 
   while [ "$serverCounter" -lt "$NumServerVersions" ]; do
-    version=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+    version=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
     isServerInstalled $version $serverType && echo $version && return $TRUE
 
     serverCounter=$((serverCounter + 1))
@@ -612,7 +615,7 @@ buildServerLists () {
 
   while [ "$serverCounter" -lt "$NumServerVersions" ]; do
 
-    serverVersion=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | sed -e 's/ / /g')
+    serverVersion=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
     ServerVersionList="$ServerVersionList$serverVersion "
 
     isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
@@ -1291,7 +1294,6 @@ downloadServer () {
   download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
 
   initServer $serverVersion $serverType
-  buildServerLists # FIXME: Server shown with “not installed” letters after first launch
 }
 
 # TODO:‌ Make this non-interactive if the script was kickstarted, but only if
@@ -1333,14 +1335,19 @@ runServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
 
-  if [ $KICKSTART = $TRUE ] || dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
-    resetTerminal
-
-    download ipinfo.io
-
-    waitForEnter "return to the launcher"
-    resetTerminal
+  if [ $KICKSTART = $TRUE ]; then
+    dialogInfo "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type $(textFormatEmphasis "/stop") in the console to shut down the server."
+    sleep $LONG_DELAY
+  else
+    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."
   fi
+    
+  resetTerminal
+
+  download ipinfo.io
+
+  waitForEnter "return to the launcher"
+  resetTerminal
 }
 
 help() {
@@ -1429,12 +1436,21 @@ init () {
   fi
 }
 
-# Do the kickstart
+# Do the kickstart, let’s get down to business.
+# $1 (optional) is the desired server type.
 
 kickStart () {
-  lssv=$(getLatestStableServerVersion)
-  [ -z $lssv ] && lssv=$(getLatestInstalledServerVersion)
-  [ $lssv ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
+  serverType=$1
+  
+  lssv=$(getLatestStableServerVersion $serverType)
+  [ -z $lssv ] && lssv=$(getLatestInstalledServerVersion $serverType)
+  [ -z $lssv ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
+
+  if isServerInstalled $lssv; then
+    runServer $lssv $serverType
+  else
+    downloadServer $lssv $serverType
+  fi
 }
 
 # Stuff to do on script exit
@@ -1454,10 +1470,7 @@ processArguments $@
 
 # Check for the UI toolkit
 
-if [ ! $(command -v dialog) ]; then
-  echo "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
-  exit $FALSE
-fi
+[ ! $(command -v dialog) ] && errorExit "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
 
 # Prepare dialogrc pre-init for a custom color scheme
 # Drop a dialogrc named ‘color’ there to customize the appearance
