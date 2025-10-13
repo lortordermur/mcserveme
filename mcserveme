@@ -175,7 +175,7 @@ AgreedToEULAKey="agreed-to-eula"
 NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
 INFO_DELAY="3" # A somewhat longer delay for infobox chains
 LONG_DELAY=$(($INFO_DELAY * 2))
-DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
+DIALOG_COMMON_MIN="--colors --column-separator ' ' --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 
 # Default dialog sizes
@@ -322,7 +322,8 @@ textFormatEmphasis () {
   echo "\Z0\Zr $* \Zn"
 }
 
-# Use this when passing a server version with spaces.
+# Replace spaces with non-break spaces. Use this when passing a server version
+# with spaces in the name.
 
 nameWithSpaces () {
   echo "$1" | NBSPToSpace
@@ -331,13 +332,13 @@ nameWithSpaces () {
 # Convert spaces from stdin to no-break spaces.
 
 spaceToNBSP () {
-  sed "s| | |g"
+  sed "s/ / /g"
 }
 
 # Convert no-break spaces from stdin to spaces.
 
 NBSPToSpace () {
-  sed "s| | |g"
+  sed "s/ / /g"
 }
 
 # Non-interactive error-and-out message for kickstart.
@@ -462,7 +463,6 @@ isServerVersionNewer () {
     server=$2 && rhs=$serverCounter
 
     serverCounter=$((serverCounter + 1))
-    
   done
 
   if [ $lhs ] && [ $rhs ]; then
@@ -602,7 +602,16 @@ cacheEULA () {
 # TODO: Set this up for different server types (Fabric, vanilla etc.)
 
 buildServerLists () {
-  ! fileExists $GAME_VER_FILE && dialogMessage "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
+  if ! fileExists $GAME_VER_FILE; then
+    if [ ! $KICKSTART = $TRUE ]; then
+      dialogMessage "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu."
+      return $FALSE
+    else # Kickstart cannot continue here because it is non-interactive
+      dialogInfo "The list cache is empty! Try $(textFormatEmphasis "force update list cache") in the main menu."
+      sleep $LONG_DELAY
+      exit $FALSE
+    fi
+  fi
 
   ServerVersionList=; ServerVersionListStable=; ServerVersionListInstalled=
   serverVersion=
@@ -1167,8 +1176,7 @@ readConfigKey () {
 
   ! fileAccessible $file && touch $file # Make sure the file exists
 
-  #value=$(sed -e '|^#|!s| ||g' $file | grep -e "^$key=.*" | cut -d "=" -f 2)
-  value=$(grep -e "^$key=.*" $file | sed -e 's| ||g' | cut -d "=" -f 2)
+  value=$(grep -e "^$key=.*" $file | sed -e 's/ //g' | cut -d "=" -f 2)
   [ "$value" ] || value=$defaultValue
 
   echo $value
@@ -1185,7 +1193,7 @@ writeConfigKey () {
   if fileAccessible $file; then # The file is there and we can read and write
     # Many non-GNU seds cannot modify data in-place, hence we need a tempfile
 
-    #sed -e '|^#|!s| ||g' $file > $TMP_FILE # Sanitize the file and copy to /tmp
+    #sed -e '/^#/!s/ //g' $file > $TMP_FILE # Sanitize the file and copy to /tmp
     cp -f $file $TMP_FILE
 
     if grep -e "^$key=.*" $TMP_FILE; then # Is the key in the file?
@@ -1193,8 +1201,8 @@ writeConfigKey () {
       if grep -e "^$key=$value$" $TMP_FILE; then
         return # Same value, outta here
       else
-        #sed -e "s|^$key=.*|$key=$value|g" $file >> $TMP_FILE # Update value
-        sed -e "s|\($key *= *\).*|\1$value|g" $file > $TMP_FILE
+        #sed -e "s/^$key=.*/$key=$value/g" $file >> $TMP_FILE # Update value
+        sed -e "s/\($key *= *\).*/\1$value/g" $file > $TMP_FILE
       fi 
 
     else
@@ -1302,8 +1310,8 @@ downloadServer () {
   initServer $serverVersion $serverType
 }
 
-# TODO:‌ Make this non-interactive if the script was kickstarted, but only if
-# the user has globally agreed to the EULA
+# Initialize the server of version $1 and (optionally) type $2 and if the EULA
+# has been agreed to, start it right away.
 
 initServer () {
   serverVersion="$1"
@@ -1436,8 +1444,8 @@ init () {
   #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
 
   if [ $KICKSTART = $TRUE ]; then
-    dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no questions asked."
-    sleep $INFO_DELAY
+    dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no frills attached, no questions asked."
+    sleep $LONG_DELAY
     kickStart
   fi
 }
