@@ -322,6 +322,12 @@ textFormatEmphasis () {
   echo "\Z0\Zr $* \Zn"
 }
 
+# Use this when passing a server version with spaces.
+
+nameWithSpaces () {
+  echo "$1" | NBSPToSpace
+}
+
 # Convert spaces from stdin to no-break spaces.
 
 spaceToNBSP () {
