@@ -328,10 +328,10 @@ followExecutableSymlinks () {
   file=$1
   previousFile=
 
-  [ "$verbose" ] && dialogInfoBox "Resolving symlink chain …" && sleep $NAVIGATION_DELAY
+  [ "$verbose" ] && dialogInfo "Resolving symlink chain …" && sleep $NAVIGATION_DELAY
   
   while file=$(readlink $(command -v $file)); do
-    [ "$verbose" ] && dialogInfoBox "Resolving $(textFormatEmphasis $file) …" && sleep $NAVIGATION_DELAY
+    [ "$verbose" ] && dialogInfo "Resolving $(textFormatEmphasis $file) …" && sleep $NAVIGATION_DELAY
     previousFile=$file
   done
   
@@ -349,7 +349,7 @@ checkCommandExists () {
     errorText="Command '$(textFormatError $cmd)' is not available!"
     [ $pkg ] && errorText="$errorText Please install the '$(textFormatError $pkg)' package. Exiting."
 
-    dialogMessageBox "Required dependency missing" "$errorText"
+    dialogMessage "Required dependency missing" "$errorText"
     exit 1
   fi
 }
@@ -360,20 +360,20 @@ detectTextEditor () {
   editor=
 
   if [ "$EDITOR" ]; then
-    dialogInfoBox "’EDITOR’ environment variable is set …"
+    dialogInfo "’EDITOR’ environment variable is set …"
     editor=$EDITOR
     sleep $INFO_DELAY
   elif [ $(command -v "editor") ]; then # On systems with update-alternatives
     target=$(followExecutableSymlinks editor)
-    dialogInfoBox "‘editor’ symlink is present, pointing to $(textFormatEmphasis $target) …"
+    dialogInfo "‘editor’ symlink is present, pointing to $(textFormatEmphasis $target) …"
     editor="editor"
     sleep $INFO_DELAY
   elif [ $(command -v "$DEFAULT_OPTION_TEXT_EDITOR") ]; then
-    dialogInfoBox "Using internal default ‘$DEFAULT_OPTION_TEXT_EDITOR’ …"
+    dialogInfo "Using internal default ‘$DEFAULT_OPTION_TEXT_EDITOR’ …"
     editor=$DEFAULT_OPTION_TEXT_EDITOR
     sleep $INFO_DELAY
   else
-    dialogInfoBox "‘$DEFAULT_OPTION_TEXT_EDITOR’ not found, falling back to ‘vi’ …"
+    dialogInfo "‘$DEFAULT_OPTION_TEXT_EDITOR’ not found, falling back to ‘vi’ …"
     editor="vi" # Should be installed just about everywhere
     sleep $INFO_DELAY
   fi
@@ -468,37 +468,37 @@ needToCache () {
 # (see: https://github.com/FabricMC/fabric-meta)
 
 cacheFabricMeta () {
-  dialogInfoBox "Caching game versions …"
+  dialogInfo "Caching game versions …"
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/game" > $GAME_VER_FILE
   
   if [ ! -s "$GAME_VER_FILE" ] && fileExists $GAME_VER_FILE; then
-    dialogMessageBox "Caching error" "There was a problem updating the game version list! Exiting."
+    dialogMessage "Caching error" "There was a problem updating the game version list! Exiting."
     exit 1
   fi
   
-  dialogInfoBox "Caching loader versions …"
+  dialogInfo "Caching loader versions …"
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/loader" > $LOADER_VER_FILE
 
   if [ ! -s "$LOADER_VER_FILE" ] && fileExists $LOADER_VER_FILE; then
-    dialogMessageBox "Caching error" "There was a problem updating the loader list! Exiting."
+    dialogMessage "Caching error" "There was a problem updating the loader list! Exiting."
     exit 1
   fi
 
-  dialogInfoBox "Caching installer versions …"
+  dialogInfo "Caching installer versions …"
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/installer" > $INSTALLER_VER_FILE
   
   if [ ! -s "$INSTALLER_VER_FILE" ] && fileExists $INSTALLER_VER_FILE; then
-    dialogMessageBox "Caching error" "There was a problem updating the installer list! Exiting."
+    dialogMessage "Caching error" "There was a problem updating the installer list! Exiting."
     exit 1
   fi
 }
 
 cacheEULA () {
-  dialogInfoBox "Caching Minecraft EULA …"
+  dialogInfo "Caching Minecraft EULA …"
   download "$CURL_OPTIONS_FOLLOW" "$EULA_URL" | HTMLToText | HTMLEULAFilter > $EULA_FILE
   
   if [ ! $? ] && fileExists $EULA_FILE; then
-    dialogMessageBox "Caching error" "There was a problem updating the EULA file! Please read the text on $EULA_URL before installing a server with this software."
+    dialogMessage "Caching error" "There was a problem updating the EULA file! Please read the text on $EULA_URL before installing a server with this software."
   fi
 }
 
@@ -510,7 +510,7 @@ cacheEULA () {
 # TODO: Set this up for different server types (Fabric, vanilla etc.)
 
 buildServerLists () {
-  ! fileExists $GAME_VER_FILE && dialogMessageBox "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
+  ! fileExists $GAME_VER_FILE && dialogMessage "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
 
   ServerVersionList=; ServerVersionListStable=; ServerVersionListInstalled=
   serverVersion=
@@ -523,7 +523,7 @@ buildServerLists () {
   NumStableServerVersions="0"
   NumInstalledServerVersions="0"
 
-  dialogInfoBox "Building server lists for server type ‘$serverType’ …"
+  dialogInfo "Building server lists for server type ‘$serverType’ …"
 
   serverCounter="0"
 
@@ -575,20 +575,20 @@ HTMLEULAFilter () {
 
 # Show a message box dialog with title $1 and text $2
 
-dialogMessageBox () {
+dialogMessage () {
   dialog $DIALOG_COMMON --title "$1" --msgbox "$2" $MESSAGEBOX_SIZE
 }
 
 # Show a simple titleless box with some text
 
-dialogInfoBox () {
+dialogInfo () {
   dialog $DIALOG_COMMON --infobox "$*" $INFOBOX_SIZE
 }
 
 # Takes a command’s output and continually displays it in a box with text $1
 # until finished, then adds an OK button
 
-dialogProgramBox () {
+dialogProgram () {
   dialog $DIALOG_COMMON --programbox "$1" $PROGRAM_BOX_SIZE
 }
 
@@ -627,7 +627,7 @@ dialogProgress () {
 # $2 (optional) is the server type, for example "fabric"
 
 menuServerList () {
-  [ ! "$ServerVersionList" ] && dialogMessageBox "Server version list empty" "The list of server versions is null! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
+  [ ! "$ServerVersionList" ] && dialogMessage "Server version list empty" "The list of server versions is null! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
 
   serverSubset=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
@@ -637,7 +637,7 @@ menuServerList () {
       menuList=$ServerVersionListInstalled
       howMany=$NumInstalledServerVersions
       if [ $howMany = "0" ]; then
-        dialogMessageBox "No servers" "You do not have any servers installed! Please pick one from the ‘stable’ or ‘all’ list."
+        dialogMessage "No servers" "You do not have any servers installed! Please pick one from the ‘stable’ or ‘all’ list."
         return $FALSE
       fi ;;
     stable)
@@ -842,10 +842,10 @@ optionUIJarFolder () {
         if mkdir -p $dir; then
           OptionJarDir=$dir
           saveConfig
-          dialogMessageBox "Success" "The directory $(textFormatEmphasis $dir) has been created."
+          dialogMessage "Success" "The directory $(textFormatEmphasis $dir) has been created."
           break
         else
-          dialogMessageBox "Error" "The directory $(textFormatEmphasis $dir) could not be created."
+          dialogMessage "Error" "The directory $(textFormatEmphasis $dir) could not be created."
         fi
       fi
       
@@ -874,10 +874,10 @@ optionUIWorldFolder () {
         if mkdir -p $dir; then
           OptionWorldDir=$dir
           saveConfig
-          dialogMessageBox "Success" "The directory $(textFormatEmphasis $dir) has been created."
+          dialogMessage "Success" "The directory $(textFormatEmphasis $dir) has been created."
           break
         else
-          dialogMessageBox "Error" "The directory $(textFormatEmphasis $dir) could not be created."
+          dialogMessage "Error" "The directory $(textFormatEmphasis $dir) could not be created."
         fi
       fi
       
@@ -918,13 +918,13 @@ optionUIAgreeToEULA () {
   agreed=$OptionAgreedToEULA
   
   if [ $agreed = "true" ]; then
-    dialogMessageBox "EULA" "You already agreed to the Minecraft EULA."
+    dialogMessage "EULA" "You already agreed to the Minecraft EULA."
   else
     if dialogYesNo "EULA" "Do you agree to the Minecraft EULA?\n$EULA_URL"; then
       OptionAgreedToEULA="true"
-      dialogMessageBox "EULA" "Agreement acknowledged. You can now start servers."
+      dialogMessage "EULA" "Agreement acknowledged. You can now start servers."
     else
-      dialogMessageBox "EULA" "You need to agree to the Minecraft EULA before you can start a server."
+      dialogMessage "EULA" "You need to agree to the Minecraft EULA before you can start a server."
     fi
   fi
   
@@ -936,7 +936,7 @@ optionUIAgreeToEULA () {
 
 installScript () {
   # Check if we are running an installed version
-  [ $SCRIPT_DIR = $BIN_DIR ] && dialogMessageBox "Path error" "The $APP_NAME script is already installed. Please uninstall it first." && return $FALSE
+  [ $SCRIPT_DIR = $BIN_DIR ] && dialogMessage "Path error" "The $APP_NAME script is already installed. Please uninstall it first." && return $FALSE
   
   dialogYesNo "$APP_NAME installation" "Install the $(textFormatEmphasis $SCRIPT_NAME) script to $(textFormatEmphasis $BIN_DIR)?" || return
   
@@ -944,16 +944,16 @@ installScript () {
     dialogYesNo "Path error" "$(textFormatEmphasis $BIN_DIR) is not in your PATH variable! Install anyway?" || return $FALSE
   fi
 
-  dialogInfoBox "Installing the $APP_NAME script …"
+  dialogInfo "Installing the $APP_NAME script …"
   
   cp -fp $0 $BIN_DIR
   
-  dialogInfoBox "Installing the documentation …"
+  dialogInfo "Installing the documentation …"
 
   mkdir -p $LOCAL_DIR
   cp -f $README_FILE $LICENSE_FILE $LOCAL_DIR
   
-  dialogMessageBox "Installation successful" "Script and documentation have been installed. You can now start $APP_NAME by typing $(textFormatEmphasis $SCRIPT_NAME) anywhere."
+  dialogMessage "Installation successful" "Script and documentation have been installed. You can now start $APP_NAME by typing $(textFormatEmphasis $SCRIPT_NAME) anywhere."
 
   # Optionally install a desktop entry if desktop-file-utils is installed
   
@@ -969,14 +969,14 @@ installScript () {
      command -v "desktop-file-install"; then
 
       if dialogYesNo "Desktop entry" "Do you also want to install a desktop icon and menu entry?"; then
-        dialogInfoBox "Installing desktop file and icons …"
+        dialogInfo "Installing desktop file and icons …"
 
         mkdir -p $APPS_DIR "$ICON_THEME_DIR/scalable" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS
         cp -f "$desktopAssetsDir/$SCRIPT_NAME.svg" "$ICON_THEME_DIR/scalable/apps"
         cp -f "$desktopAssetsDir/$SCRIPT_NAME.png" $ICON_THEME_DIR/$ICON_DIMENSIONS"x"$ICON_DIMENSIONS"/apps"
         desktop-file-install --dir="$APPS_DIR" "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop"
         
-        dialogMessageBox "Installation successful" "The desktop assets have been installed."
+        dialogMessage "Installation successful" "The desktop assets have been installed."
       fi
 
   else
@@ -988,7 +988,7 @@ installScript () {
 
 uninstallScript () {
   if ! fileExists "$BIN_DIR/$SCRIPT_NAME"; then
-    dialogMessageBox "No installation found" "The script is not installed."
+    dialogMessage "No installation found" "The script is not installed."
     return
   fi
 
@@ -1007,10 +1007,10 @@ uninstallScript () {
   if directoryEmpty $LOCAL_DIR; then
     rmdir $LOCAL_DIR
   else
-    dialogMessageBox "Leftover data" "There is still some data, possibly server jars or worlds, left in $(textFormatEmphasis $LOCAL_DIR). You should look over those manually."
+    dialogMessage "Leftover data" "There is still some data, possibly server jars or worlds, left in $(textFormatEmphasis $LOCAL_DIR). You should look over those manually."
   fi
 
-  dialogMessageBox "Uninstall successful" "$APP_NAME has been removed."
+  dialogMessage "Uninstall successful" "$APP_NAME has been removed."
 }
 
 # Load the global settings from the configuration file
@@ -1038,7 +1038,7 @@ saveConfig () {
 # Write the config file with the defaults
 
 writeDefaultConfig () {
-  dialogMessageBox "Initial configuration" "No configuration file was found; creating one in $(textFormatEmphasis $CONFIG_DIR)."
+  dialogMessage "Initial configuration" "No configuration file was found; creating one in $(textFormatEmphasis $CONFIG_DIR)."
 
   echo $CONFIG_HEADER > $CONFIG_FILE
 
@@ -1057,7 +1057,7 @@ factoryReset () {
   OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
 
   saveConfig
-  dialogMessageBox "Reset" "All global options have been reset."
+  dialogMessage "Reset" "All global options have been reset."
 }
 
 # Read the value of a key=value pair from a configuration file.
@@ -1105,7 +1105,7 @@ writeConfigKey () {
     mv -f $TMP_FILE $file # Update the file with the changes
   
   else # File not accessible or nonexistent
-    dialogMessageBox "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
+    dialogMessage "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
     exit 1
   fi
 }
@@ -1121,7 +1121,7 @@ online () {
 onlineWarning () {
   online && return $TRUE
   
-  dialogMessageBox "No internet connectivity" "$*"
+  dialogMessage "No internet connectivity" "$*"
   
   return $FALSE
 }
@@ -1140,12 +1140,12 @@ downloadServer () {
 
   [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
   
-  dialogInfoBox "Finding the best loader for $serverVersion ($serverType) …"
+  dialogInfo "Finding the best loader for $serverVersion ($serverType) …"
 
   download $CURL_OPTIONS_USER_AGENT "$FABRIC_API_URL/versions/loader/$serverVersion" > $matchFile
 
   loaderJSON=$(cat $matchFile)
-  [ ! "$loaderJSON" ] && dialogMessageBox "Transmission error" "The loader match data could not be obtained." && return 1
+  [ ! "$loaderJSON" ] && dialogMessage "Transmission error" "The loader match data could not be obtained." && return 1
 
   numLoaderVersions=$(echo $loaderJSON | jq ". | length")
 
@@ -1168,23 +1168,23 @@ downloadServer () {
   done
   
   if [ "$anyLoader" = "$stableLoader" ]; then
-    dialogInfoBox "Finding the best loader for $serverVersion ($serverType) … $stableLoader."
+    dialogInfo "Finding the best loader for $serverVersion ($serverType) … $stableLoader."
     sleep $INFO_DELAY
     loader=$stableLoader
   else
-    dialogInfoBox "Finding the best loader for $serverVersion ($serverType) … several matches."
+    dialogInfo "Finding the best loader for $serverVersion ($serverType) … several matches."
     dialogYesNo "Several loader matches" "Would you like to install the newer $(textFormatEmphasis "unstable") loader version $(textFormatEmphasis "$anyLoader") rather than the stable $(textFormatEmphasis "$stableLoader")? This is rather not recommended if you are running a stable server version." && loader=$anyLoader || loader=$stableLoader
   fi
 
   installerJSON=$(cat $INSTALLER_VER_FILE)
-  [ ! "$installerJSON" ] && dialogMessageBox "Transmission error" "The installer data could not be obtained." && return $FALSE
+  [ ! "$installerJSON" ] && dialogMessage "Transmission error" "The installer data could not be obtained." && return $FALSE
   installer=$(echo $installerJSON | jq -r ".[0].version")
   
-  dialogInfoBox "Creating directories …"
+  dialogInfo "Creating directories …"
   serverDir="$OptionJarDir/$serverType-server-$serverVersion"
   mkdir -p $serverDir
 
-  dialogInfoBox "Downloading $serverType server $serverVersion …"
+  dialogInfo "Downloading $serverType server $serverVersion …"
   download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
 
   initServer $serverVersion $serverType
@@ -1199,7 +1199,7 @@ initServer () {
   serverVersion="$1"
   [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
 
-  dialogInfoBox "Initializing Server …"
+  dialogInfo "Initializing Server …"
   
   serverDir="$OptionJarDir/$serverType-server-$serverVersion"
   cd $serverDir
@@ -1351,7 +1351,7 @@ export DIALOGRC="$CONFIG_DIR/colors"
 # Root check
 
 if [ $(id -u) = 0 ]; then
-  dialogMessageBox "Root detected" "Running a game server as root $(textFormatError "is a bad idea"). Exiting."
+  dialogMessage "Root detected" "Running a game server as root $(textFormatError "is a bad idea"). Exiting."
   exit 1
 fi
 
