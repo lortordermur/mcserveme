@@ -263,6 +263,7 @@ getDesktop () {
   [ "$desktop" ]         || desktop=$DESKTOP_SESSION
   [ "$desktop" ]         || desktop=$XDG_SESSION_TYPE
   [ "$desktop" = "tty" ] && desktop="TTY"
+  [ "$desktop" ]         || return $FALSE
 
   echo $desktop
 }
