@@ -409,7 +409,13 @@ isServerInstalled () {
 # Get the version of latest server jar
 
 getLatestServerVersion () { 
-  online && echo $(cat $GAME_VER_FILE | jq -r ".[0].version") || echo "unknown"
+  if online; then
+    echo $(cat $GAME_VER_FILE | jq -r ".[0].version")
+    return $TRUE
+  else
+    echo "unknown"
+    return $FALSE
+  fi
 }
 
 # Get the version of latest stable server jar
@@ -1314,7 +1320,7 @@ init () {
 
   onlineWarning "It seems there is no internet connection. Some functionality will be limited."
   
-  [ $AUTO_CACHE ] && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
+  $AUTO_CACHE && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
   
   buildServerLists
   
