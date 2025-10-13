@@ -39,7 +39,12 @@
 # - jq
 # - Any current Java runtime
 
-# Optional:
+# Optional dependencies:
+#
+# For moving data around more reliably:
+# - rsync
+#
+# For backups:
 # - zip
 # - tar + gzip
 # - 7za
@@ -1249,7 +1254,7 @@ runServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
 
-  if dialogOkCancel "Launching server" "Launching '$(textFormatEmphasis $serverVersion \($serverType\))'. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
+  if dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher."; then
     resetTerminal
 
     download ipinfo.io
