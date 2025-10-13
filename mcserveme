@@ -56,8 +56,6 @@
 
 TRUE="0"
 FALSE="1"
-TRUETERM="true"
-FALSETERM="false"
 
 # Basic information
 
@@ -318,6 +316,13 @@ textFormatEmphasis () {
   echo "\Z0\Zr $* \Zn"
 }
 
+# Non-interactive error-and-out message for kickstart.
+
+errorExit () {
+  echo "\033[1;31m$@\033[0m" 1>&2
+  exit 1
+}
+
 # Follow a symlink chain starting with $1, which must be an executable (the
 # path portion may be omitted if it is in the search path). If anything is
 # given as a second argument, for example "verbose", the output is verbose
@@ -346,10 +351,17 @@ checkCommandExists () {
   cmd=$1; pkg=$2
   
   if [ ! $(command -v $cmd) ]; then
-    errorText="Command '$(textFormatError $cmd)' is not available!"
-    [ $pkg ] && errorText="$errorText Please install the '$(textFormatError $pkg)' package. Exiting."
 
-    dialogMessage "Required dependency missing" "$errorText"
+    if [ $KICKSTART = $TRUE ]; then
+      errorText="Dependency error: Command ‘$cmd’ is not available!"
+      [ $pkg ] && errorText="$errorText Try installing the ‘$pkg’ package. --Exiting."
+      errorExit "$errorText"
+    else
+      errorText="Command ‘$(textFormatError $cmd)’ is not available!"
+      [ $pkg ] && errorText="$errorText Please install the ‘$(textFormatError $pkg)’ package. Exiting."
+      dialogMessage "Required dependency missing" "$errorText"
+    fi
+
     exit 1
   fi
 }
@@ -418,7 +430,8 @@ getLatestServerVersion () {
   fi
 }
 
-# Get the version of latest stable server jar
+# Get the version of latest stable server jar, optionally provide $1 for the
+# server type
 
 getLatestStableServerVersion () {
   if ! online; then
@@ -1320,11 +1333,23 @@ init () {
 
   onlineWarning "It seems there is no internet connection. Some functionality will be limited."
   
-  $AUTO_CACHE && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
+  [ $AUTO_CACHE = $TRUE ] && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
   
   buildServerLists
   
   #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
+
+  [ $KICKSTART = $TRUE ] && kickStart
+}
+
+# Do the kickstart
+
+kickStart () {
+  lssv=$(getLatestStableServerVersion)
+  $? && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
+  
+  #if ! isServerInstalled "$lssv"; then
+  #fi
 }
 
 # Stuff to do on script exit
