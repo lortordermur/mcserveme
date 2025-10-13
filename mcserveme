@@ -507,7 +507,7 @@ cacheEULA () {
 # The results are stored in the global server lists:
 # ServerVersionList, ServerVersionListStable and ServerVersionListInstalled
 
-# TODO: Set this up for different server types
+# TODO: Set this up for different server types (Fabric, vanilla etc.)
 
 buildServerLists () {
   ! fileExists $GAME_VER_FILE && dialogMessageBox "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
@@ -586,7 +586,7 @@ dialogInfoBox () {
 }
 
 # Takes a command’s output and continually displays it in a box with text $1
-# until finished, then adds an ok button
+# until finished, then adds an OK button
 
 dialogProgramBox () {
   dialog $DIALOG_COMMON --programbox "$1" $PROGRAM_BOX_SIZE
@@ -614,7 +614,13 @@ dialogInput () {
 
 dialogDirSelect (){
   dialog $DIALOG_COMMON --title "$1" --dselect "$2" $DIR_SELECTOR_SIZE
-} 
+}
+
+# Progress bar with title $1, text $2 and (optional) initial percentage $3
+
+dialogProgress () {
+  dialog $DIALOG_COMMON --title "$1" --gauge "$2" $MESSAGEBOX_SIZE "$3"
+}
 
 # Show the server list. $1 = "stable" for stable servers only, "installed" for
 # installed ones, otherwise "all".
