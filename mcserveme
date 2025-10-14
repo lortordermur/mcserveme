@@ -152,6 +152,7 @@ DEFAULT_OPTION_JAR_DIR=$JAR_DIR
 DEFAULT_OPTION_WORLD_DIR=$WORLD_DIR
 DEFAULT_OPTION_JAVA_MEMORY="2G"
 DEFAULT_OPTION_TEXT_EDITOR="nano" # Default fallback editor
+DEFAULT_OPTION_ARCHIVER="tgz" # Default archiver
 DEFAULT_OPTION_AGREED_TO_EULA="false"
 
 # Global option variables
@@ -160,6 +161,7 @@ OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
 OptionJarDir=$DEFAULT_OPTION_JAR_DIR
 OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
 OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
+OptionArchiver=$DEFAULT_OPTION_ARCHIVER
 OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
 
 # Option variable keys
@@ -168,6 +170,7 @@ JarDirKey="jar-directory"
 WorldDirKey="world-directory"
 JavaMemoryKey="java-memory"
 TextEditorKey="text-editor"
+ArchiverKey="archiver"
 AgreedToEULAKey="agreed-to-eula"
 
 # Common dialog options
@@ -300,7 +303,7 @@ waitForEnter () {
   
   echo
   echo "Press Enter to $what …"
-  read "enter" 2>&1 >/dev/null
+  read "enter" 2>&1 > $NOWHERE
   sleep $NAVIGATION_DELAY
 }
 
@@ -920,9 +923,10 @@ menuGlobalOptions () {
     "j" "Server jar root folder" \
     "w" "World root folder *" \
     "e" "Default text editor" \
+    "a" "Default archiver" \
     "i" "Install $APP_NAME" \
     "u" "Uninstall $APP_NAME" \
-    "a" "Agree to the Minecraft EULA" \
+    "g" "Agree to the Minecraft EULA" \
     "r" "Reset to default settings"
     )
 
@@ -935,11 +939,13 @@ menuGlobalOptions () {
         optionUIWorldFolder ;;
       e)
         optionUITextEditor ;;
+      a)
+        optionUIArchiver ;;
       i)
         installScript ;;
       u)
         uninstallScript ;;
-      a)
+      g)
         optionUIAgreeToEULA ;;
       r)
         dialogYesNo "Options reset" "Revert all global settings to their defaults?" && factoryReset ;;
@@ -1056,6 +1062,46 @@ optionUITextEditor () {
   echo $editor
 }
 
+optionUIArchiver () {
+  installed="*"
+  
+  tgzInstalled=
+  zipInstalled=
+  sevenZipInstalled=
+
+  commandExists "tar" && commandExists "gzip" && tgzInstalled=$installed
+  commandExists "zip" && zipInstalled=$installed
+  commandExists "7z" || commandExists "7za" || commandExists "7zr" && sevenZipInstalled=$installed
+
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Archiver for backups" --menu \
+  "Archiver to use for backups; currently $(textFormatEmphasis $OptionArchiver). $(textFormatEmphasis "*") denotes that the appropriate binaries are installed." \
+  $MAIN_MENU_SIZE \
+    "t" "Gzipped tar (.tgz) $tgzInstalled" \
+    "z" "Zip (.zip) $zipInstalled" \
+    "7" "7-Zip (.7z) $sevenZipInstalled"
+    )
+
+    case $choice in
+      t)
+        OptionArchiver="tgz"
+        break ;;
+      z)
+        OptionArchiver="zip"
+        break ;;
+      7)
+        OptionArchiver="7z"
+        break ;;
+      *)
+        return $FALSE ;;
+    esac
+
+  done
+
+  dialogMessage "Archiver set" "Default archiver has been set to $(textFormatEmphasis $OptionArchiver)."
+}
+
 # Ask the user to agree with the Minecraft EULA
 
 optionUIAgreeToEULA () {
@@ -1164,6 +1210,7 @@ loadConfig () {
   OptionWorldDir=$(readConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR)
   OptionJavaMemory=$(readConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY)
   OptionTextEditor=$(readConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR)
+  OptionArchiver=$(readConfigKey $CONFIG_FILE $ArchiverKey $DEFAULT_OPTION_ARCHIVER)
   OptionAgreedToEULA=$(readConfigKey $CONFIG_FILE $AgreedToEULAKey $DEFAULT_OPTION_AGREED_TO_EULA)
 }
 
@@ -1176,6 +1223,7 @@ saveConfig () {
   writeConfigKey $CONFIG_FILE $WorldDirKey $OptionWorldDir
   writeConfigKey $CONFIG_FILE $JavaMemoryKey $OptionJavaMemory
   writeConfigKey $CONFIG_FILE $TextEditorKey $OptionTextEditor
+  writeConfigKey $CONFIG_FILE $ArchiverKey $OptionArchiver
   writeConfigKey $CONFIG_FILE $AgreedToEULAKey $OptionAgreedToEULA
 }
 
@@ -1190,6 +1238,7 @@ writeDefaultConfig () {
   writeConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR
   writeConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY
   writeConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR
+  writeConfigKey $CONFIG_FILE $ArchiverKey $DEFAULT_OPTION_ARCHIVER
   writeConfigKey $CONFIG_FILE $AgreedToEULAKey $DEFAULT_OPTION_AGREED_TO_EULA
 }
 
@@ -1198,6 +1247,7 @@ factoryReset () {
   OptionJarDir=$DEFAULT_OPTION_JAR_DIR
   OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
   OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
+  OptionArchiver=$DEFAULT_OPTION_ARCHIVER
   OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
 
   saveConfig
@@ -1260,7 +1310,7 @@ writeConfigKey () {
 # Return true if we have internet connectivity
 
 online () {
-  ping -c 1 $PING_IP | grep -q "0%" >/dev/null
+  ping -c 1 $PING_IP | grep -q "0%" > $NOWHERE
 }
 
 # A small wrapper around the ‘online’ function that displays $* as a message.
