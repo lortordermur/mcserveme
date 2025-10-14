@@ -87,6 +87,9 @@ SERVER_TYPE_NAME="Fabric"
 # Fabric Meta API
 
 FABRIC_API_URL="https://meta.fabricmc.net/v2"
+
+# Common API‌ constants
+
 API_CACHE_INTERVAL="3600" # seconds
 
 # Filesystem related stuff
@@ -472,7 +475,7 @@ download () {
 
 # Check whether a server version is installed. $1 is the version as displayed
 # in the server lists. $2 (optional) is the server type and defaults to
-# “$DEFAULT_SERVER_TYPE”
+# “$SERVER_TYPE”
 
 isServerInstalled () {
   version=$1
@@ -553,7 +556,7 @@ getLatestStableServerVersion () {
 getLatestInstalledServerVersion () {
   serverType=$1
 
-  [ -z $serverType ] && serverType=$DEFAULT_SERVER_TYPE
+  [ -z $serverType ] && serverType=$SERVER_TYPE
   ! fileAccessible $GAME_VER_FILE && echo "unknown" &&‌ return $FALSE
   
   serverListJSON=$(cat $GAME_VER_FILE)
@@ -657,7 +660,7 @@ buildServerLists () {
 
   serverListJSON=$(cat $GAME_VER_FILE)
 
-  [ -z "$1" ] && serverType=$DEFAULT_SERVER_TYPE || serverType=$1
+  [ -z "$1" ] && serverType=$SERVER_TYPE || serverType=$1
   
   NumServerVersions=$(echo $serverListJSON | jq ". | length")
   NumStableServerVersions="0"
@@ -711,6 +714,16 @@ HTMLToText () {
 
 HTMLEULAFilter () {
   sed -e '/^\s*$/d' -e '/EULA | Minecraft/,/}(window);/d' -e '/.pageBottom/d'
+}
+
+# Make a prefix (e.g. for file or directory names) from $1 (server version)
+# and $2 (server type)
+
+serverPrefix () {
+  serverVersion="$1"
+  [ -z "$2" ] && serverType=$SERVER_TYPE || serverType="$2"
+
+  echo "$serverType-server-$serverVersion"
 }
 
 # Show a message box dialog with title $1 and text $2
@@ -770,7 +783,7 @@ menuServerList () {
   [ ! "$ServerVersionList" ] && dialogMessage "Server version list empty" "The list of server versions is null! Try $(textFormatEmphasis "force update list cache") in the main menu." && return $FALSE
 
   serverSubset=$1
-  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   case $serverSubset in
     installed)
@@ -812,7 +825,7 @@ menuServerList () {
 
 menuInstalledServer () {
   serverVersion=$1
-  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   while true; do
     choice=$(
@@ -820,6 +833,7 @@ menuInstalledServer () {
   "Manage the $serverVersion ($serverType) server installation." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
+    "w" "Select world" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
     "c" "Erase world cache" \
@@ -829,6 +843,8 @@ menuInstalledServer () {
     case $choice in
       s)
         runServer $serverVersion $serverType ;;
+      w)      
+        continue ;;
       p)
         $OptionTextEditor "$OptionJarDir/$serverType-server-$serverVersion/server.properties" ;;
       b)      
@@ -836,6 +852,7 @@ menuInstalledServer () {
       c)
         continue ;;
       u)
+        dialogYesNo "Uninstall server" "Warning: This will delete $(textFormatError "everything") under $(textFormatEmphasis "$OptionJarDir/$serverType-server-$serverVersion"), including any local world data! Continue?"
         continue ;;
       *)
         break ;;
@@ -848,7 +865,7 @@ menuInstalledServer () {
 
 menuWorlds () {
   serverVersion=$1
-  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
   while true; do
     choice=$(
@@ -856,10 +873,9 @@ menuWorlds () {
   "World $worldName (using $worldSize of storage)." \
   $MAIN_MENU_SIZE \
     "r" "Rename world" \
-    "m" "Move world" \
     "b" "Backup/restore" \
     "p" "Purge world" \
-    "d" "Delete world" # with or without directory
+    "d" "Delete world"
     )
 
     case $choice in
@@ -884,7 +900,7 @@ menuWorlds () {
 
 menuAvailableServer () {
   version=$1
-  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   while true; do
     choice=$(
@@ -946,13 +962,6 @@ menuGlobalOptions () {
     esac
 
   done
-}
-
-# Sub-menu of global options: How to proceed when a newer server is being
-# installed
-
-radioServerUpgradeBehavior () {
-  return
 }
 
 # Configuration UI for Java memory
@@ -1327,7 +1336,7 @@ downloadServer () {
   serverType=
   loaderJSON=
 
-  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
+  [ -z "$2" ] && serverType=$SERVER_TYPE || serverType="$2"
   
   dialogInfo "Finding the best loader for $serverVersion ($serverType) …"
 
@@ -1399,7 +1408,7 @@ downloadServer () {
 
 initServer () {
   serverVersion="$1"
-  [ -z "$2" ] && serverType=$DEFAULT_SERVER_TYPE || serverType="$2"
+  [ -z "$2" ] && serverType=$SERVER_TYPE || serverType="$2"
 
   dialogInfo "Initializing Server …"
   
@@ -1432,7 +1441,7 @@ initServer () {
 
 runServer () {
   serverVersion=$1
-  [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
   serverDir="$OptionJarDir/$serverType-server-$serverVersion"
   cd $serverDir
@@ -1551,12 +1560,12 @@ init () {
   
   [ $AUTO_CACHE = $TRUE ] && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
   
-  buildServerLists
+  [ $KICKSTART = $FALSE ] && buildServerLists
   
   #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
 
   if [ $KICKSTART = $TRUE ]; then
-    dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no frills attached, no questions asked."
+    dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no frills attached, no questions posed."
     sleep $LONG_DELAY
     kickStart
   fi
