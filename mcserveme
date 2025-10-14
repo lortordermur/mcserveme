@@ -302,7 +302,7 @@ waitForEnter () {
   [ "$1" ] && what=$1
   
   echo
-  echo "Press Enter to $what …"
+  echo "\e[1;32mPress Enter to $what …\033[0m"
   read "enter" 2>&1 > $NOWHERE
   sleep $NAVIGATION_DELAY
 }
@@ -820,28 +820,20 @@ menuInstalledServer () {
   "Manage the $serverVersion ($serverType) server installation." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
-    "w" "World actions" \
-    "m" "Java memory" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
-    "b" "Backup/restore" \
-    "c" "Erase cache" \
+    "b" "Backup" \
+    "c" "Erase world cache" \
     "u" "Uninstall"
     )
 
     case $choice in
       s)
         runServer $serverVersion $serverType ;;
-      w)
-        menuWorld $serverVersion $serverType ;;
-      m)
-        continue ;;
       p)
-        continue ;;
+        $OptionTextEditor "$OptionJarDir/$serverType-server-$serverVersion/server.properties" ;;
       b)      
         continue ;;
       c)
-        continue ;;
-      o)
         continue ;;
       u)
         continue ;;
@@ -854,7 +846,7 @@ menuInstalledServer () {
 
 # World menu for servers
 
-menuWorld () {
+menuWorlds () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
 
@@ -917,11 +909,11 @@ menuGlobalOptions () {
   while true; do
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Global options" --menu \
-  "Global and default options; those marked with * can be overridden by individual server settings." \
+  "Global and default options." \
   $MAIN_MENU_SIZE \
-    "m" "Java memory *" \
+    "m" "Java memory" \
     "j" "Server jar root folder" \
-    "w" "World root folder *" \
+    "w" "World root folder" \
     "e" "Default text editor" \
     "a" "Default archiver" \
     "i" "Install $APP_NAME" \
@@ -979,7 +971,7 @@ optionUIJavaMemory () {
 optionUIJarFolder () {
   while true; do
     
-    dir=$(dialogInput "Server jar directory" "Root directory for the server jar files:" $OptionJarDir)
+    dir=$(dialogInput "Server jar directory" "Root directory for the server jars:" $OptionJarDir)
 
     if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
       OptionJarDir=$dir
@@ -1011,7 +1003,7 @@ optionUIJarFolder () {
 optionUIWorldFolder () {
   while true; do
     
-    dir=$(dialogInput "World directory" "Default root directory for the world files:" $OptionWorldDir)
+    dir=$(dialogInput "World directory" "Root directory for the worlds:" $OptionWorldDir)
 
     if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
       OptionWorldDir=$dir
@@ -1287,7 +1279,7 @@ writeConfigKey () {
       if grep -e "^$key=$value$" $TMP_FILE; then
         return # Same value, outta here
       else
-        #sed -e "s/^$key=.*/$key=$value/g" $file >> $TMP_FILE # Update value
+        #sed -e "s/^$key=.*/$key=$value/g" $file > $TMP_FILE # Update value
         sed -e "s/\($key *= *\).*/\1$value/g" $file > $TMP_FILE
       fi 
 
@@ -1393,11 +1385,17 @@ downloadServer () {
   dialogInfo "Downloading $serverType server $serverVersion …"
   download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
 
+  echo
+  echo "#################################"
+  echo "### Server download completed ###"
+  echo "#################################"
+  echo
+  
   initServer $serverVersion $serverType
 }
 
-# Initialize the server of version $1 and (optionally) type $2 and if the EULA
-# has been agreed to, start it right away.
+# Initialize the server of version $1 and (optionally) type $2, auto-agreeing
+# to the EULA if it has already been agreed to through the global options.
 
 initServer () {
   serverVersion="$1"
@@ -1408,25 +1406,26 @@ initServer () {
   serverDir="$OptionJarDir/$serverType-server-$serverVersion"
   cd $serverDir
   
-  # We want the server to init and then exit on first start if the EULA has
-  # not been agreed to.
-  
-  rm -f eula.txt
-  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
-  
   resetTerminal
-    
-  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar" nogui
 
-  # Write whether we have agreed to the EULA into the text file
+  echo $CONFIG_HEADER > eula.txt
+  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
+  writeConfigKey "server.properties" "level-name" "$serverVersion"
+
+  java -jar "$serverType-server-$serverVersion.jar" --initSettings --nogui
 
   cd $SCRIPT_DIR
 
-  waitForEnter "return to the launcher"
+  echo
+  echo "#######################################"
+  echo "### Server initialization completed ###"
+  echo "#######################################"
+  echo
+
+  [ $KICKSTART = $FALSE ] && waitForEnter "continue"
   resetTerminal
 
-  buildServerLists
-  menuInstalledServer $serverVersion $serverType
+  [ $KICKSTART = $FALSE ] && buildServerLists
 }
 
 # Run the server of version $1 and (optionally) type $2
@@ -1435,6 +1434,14 @@ runServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$DEFAULT_SERVER_TYPE
 
+  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  cd $serverDir
+
+  # Agree to the EULA‌ if we have already agreed to it in the global options
+  
+  echo $CONFIG_HEADER > eula.txt
+  writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
+  
   if [ $KICKSTART = $TRUE ]; then
     dialogInfo "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type $(textFormatEmphasis "/stop") in the console to shut down the server."
     sleep $LONG_DELAY
@@ -1442,12 +1449,33 @@ runServer () {
     dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
   fi
     
+  cd $SCRIPT_DIR
+
   resetTerminal
 
-  download ipinfo.io
+  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar" --universe $OptionWorldDir --nogui
 
-  waitForEnter "return to the launcher"
+  echo
+  echo "#################################"
+  echo "### Server shutdown completed ###"
+  echo "#################################"
+  echo
+  
+  [ $KICKSTART = $FALSE ] && waitForEnter "return to the launcher"
   resetTerminal
+}
+
+
+instantServer () {
+  lssv=$(getLatestStableServerVersion $SERVER_TYPE)
+
+  if ! isServerInstalled $lssv $SERVER_TYPE; then
+    dialogYesNo "Server download" "The latest stable server is not installed. Download the $(textFormatEmphasis "‘$lssv ($serverType)’") server?" || return
+    downloadServer $lssv $SERVER_TYPE
+  fi
+
+  runServer $lssv $SERVER_TYPE
+  menuInstalledServer $lssv $SERVER_TYPE
 }
 
 help() {
@@ -1544,18 +1572,20 @@ kickStart () {
   [ -z $lssv ] && lssv=$(getLatestInstalledServerVersion $serverType)
   [ -z $lssv ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
 
-  if isServerInstalled $lssv; then
-    runServer $lssv $serverType
-  else
-    downloadServer $lssv $serverType
-  fi
+  ! isServerInstalled $lssv && downloadServer $lssv $serverType
+  runServer $lssv $serverType
+  unInit $TRUE
 }
 
 # Stuff to do on script exit
 
 unInit () {
   saveConfig
-  exit $TRUE
+
+  echo
+  echo "\e[1;32mThank you for using $APP_NAME!\033[0m May the netherite pickaxe be with you."
+
+  exit $1
 }
 
 ################
@@ -1613,7 +1643,7 @@ $MAIN_MENU_SIZE \
   
   case $choice in
     r)
-      runServer $(getLatestStableServerVersion) ;;
+      instantServer ;;
     i)
       menuServerList "installed" ;;
     s)
