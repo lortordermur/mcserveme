@@ -95,6 +95,7 @@ API_CACHE_INTERVAL="3600" # seconds
 # Filesystem related stuff
 
 USER_DIR=$HOME
+BACKUP_DIR=$USER_DIR
 
 SCRIPT_DIR=$(dirname $0)
 
@@ -153,6 +154,7 @@ ICON_THEME_DIR="$USER_DIR/.local/share/icons/hicolor"
 
 DEFAULT_OPTION_JAR_DIR=$JAR_DIR
 DEFAULT_OPTION_WORLD_DIR=$WORLD_DIR
+DEFAULT_OPTION_BACKUP_DIR=$BACKUP_DIR
 DEFAULT_OPTION_JAVA_MEMORY="2G"
 DEFAULT_OPTION_TEXT_EDITOR="nano" # Default fallback editor
 DEFAULT_OPTION_ARCHIVER="tgz" # Default archiver
@@ -163,6 +165,7 @@ DEFAULT_OPTION_AGREED_TO_EULA="false"
 OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
 OptionJarDir=$DEFAULT_OPTION_JAR_DIR
 OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
+OptionBackupDir=$DEFAULT_OPTION_BACKUP_DIR
 OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
 OptionArchiver=$DEFAULT_OPTION_ARCHIVER
 OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
@@ -171,6 +174,7 @@ OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
 
 JarDirKey="jar-directory"
 WorldDirKey="world-directory"
+BackupDirKey="backup-directory"
 JavaMemoryKey="java-memory"
 TextEditorKey="text-editor"
 ArchiverKey="archiver"
@@ -478,9 +482,9 @@ download () {
 # “$SERVER_TYPE”
 
 isServerInstalled () {
-  version=$1
+  serverVersion=$1
   [ -z "$2" ] && serverType=$SERVER_TYPE || serverType=$2
-  prefix="$serverType-server-$version"
+  prefix="$(serverPrefix $serverVersion $serverType)"
 
   fileExists "$OptionJarDir/$prefix/$prefix.jar" && return $TRUE || return $FALSE
 }
@@ -846,14 +850,13 @@ menuInstalledServer () {
       w)      
         continue ;;
       p)
-        $OptionTextEditor "$OptionJarDir/$serverType-server-$serverVersion/server.properties" ;;
+        $OptionTextEditor "$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties" ;;
       b)      
         continue ;;
       c)
         continue ;;
       u)
-        dialogYesNo "Uninstall server" "Warning: This will delete $(textFormatError "everything") under $(textFormatEmphasis "$OptionJarDir/$serverType-server-$serverVersion"), including any local world data! Continue?"
-        continue ;;
+        uninstallServer $serverVersion $serverType ;;
       *)
         break ;;
     esac
@@ -899,7 +902,7 @@ menuWorlds () {
 # Menu for servers that are not installed
 
 menuAvailableServer () {
-  version=$1
+  serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   while true; do
@@ -907,7 +910,7 @@ menuAvailableServer () {
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server menu" --menu \
   "Options for downloadable servers." \
   $MAIN_MENU_SIZE \
-    "i" "Download and install $version ($serverType)"
+    "i" "Download and install $serverVersion ($serverType)"
     )
 
     case $choice in
@@ -930,6 +933,7 @@ menuGlobalOptions () {
     "m" "Java memory" \
     "j" "Server jar root folder" \
     "w" "World root folder" \
+    "b" "Backup folder" \
     "e" "Default text editor" \
     "a" "Default archiver" \
     "i" "Install $APP_NAME" \
@@ -945,6 +949,8 @@ menuGlobalOptions () {
         optionUIJarFolder ;;
       w)
         optionUIWorldFolder ;;
+      b)
+        optionUIBackupFolder ;;
       e)
         optionUITextEditor ;;
       a)
@@ -962,6 +968,50 @@ menuGlobalOptions () {
     esac
 
   done
+}
+
+# The main menu.
+
+menuMain () {
+  # Main menu loop
+
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --no-cancel --erase-on-exit --title "Main menu" --menu \
+  "Welcome to $APP_NAME – $APP_DESC\n\n \
+  Launcher version: $APP_VER on $(getDesktop)/$(getKernel) $(getArch)\n \
+  Java version: $(getJavaVersion)\n \
+  Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion), installed: $(getLatestInstalledServerVersion)\n" \
+  $MAIN_MENU_SIZE \
+      "r" "Run latest stable server" \
+      "i" "Installed servers" \
+      "s" "Available servers (stable)" \
+      "a" "Available servers (all)" \
+      "u" "Force update list cache" \
+      "o" "Global options" \
+      "x" "Exit $APP_NAME"
+      )
+    
+    case $choice in
+      r)
+        instantServer ;;
+      i)
+        menuServerList "installed" ;;
+      s)
+        menuServerList "stable" ;;
+      a)
+        menuServerList "all" ;;
+      u)
+        onlineWarning "Cannot update the list cache without an internet connection." && cacheFabricMeta
+        buildServerLists ;;
+      o)
+        menuGlobalOptions ;;
+      *)
+        break ;;
+    esac
+  done
+
+  unInit
 }
 
 # Configuration UI for Java memory
@@ -1024,6 +1074,38 @@ optionUIWorldFolder () {
 
         if mkdir -p $dir; then
           OptionWorldDir=$dir
+          saveConfig
+          dialogMessage "Success" "The directory $(textFormatEmphasis $dir) has been created."
+          break
+        else
+          dialogMessage "Error" "The directory $(textFormatEmphasis $dir) could not be created."
+        fi
+      fi
+      
+    elif [ -z "$dir" ]; then
+      break
+    fi
+    
+  done
+}
+
+# Input box for the backup directory
+
+optionUIBackupFolder () {
+  while true; do
+    
+    dir=$(dialogInput "Backup directory" "Root directory for backups:" $OptionBackupDir)
+
+    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+      OptionBackupDir=$dir
+      saveConfig
+      break
+    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+
+      if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
+
+        if mkdir -p $dir; then
+          OptionBackupDir=$dir
           saveConfig
           dialogMessage "Success" "The directory $(textFormatEmphasis $dir) has been created."
           break
@@ -1209,6 +1291,7 @@ uninstallScript () {
 loadConfig () {
   OptionJarDir=$(readConfigKey $CONFIG_FILE $JarDirKey $DEFAULT_OPTION_JAR_DIR)
   OptionWorldDir=$(readConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR)
+  OptionBackupDir=$(readConfigKey $CONFIG_FILE $BackupDirKey $DEFAULT_OPTION_BACKUP_DIR)
   OptionJavaMemory=$(readConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY)
   OptionTextEditor=$(readConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR)
   OptionArchiver=$(readConfigKey $CONFIG_FILE $ArchiverKey $DEFAULT_OPTION_ARCHIVER)
@@ -1222,6 +1305,7 @@ saveConfig () {
 
   writeConfigKey $CONFIG_FILE $JarDirKey $OptionJarDir
   writeConfigKey $CONFIG_FILE $WorldDirKey $OptionWorldDir
+  writeConfigKey $CONFIG_FILE $BackupDirKey $OptionBackupDir
   writeConfigKey $CONFIG_FILE $JavaMemoryKey $OptionJavaMemory
   writeConfigKey $CONFIG_FILE $TextEditorKey $OptionTextEditor
   writeConfigKey $CONFIG_FILE $ArchiverKey $OptionArchiver
@@ -1237,6 +1321,7 @@ writeDefaultConfig () {
 
   writeConfigKey $CONFIG_FILE $JarDirKey $DEFAULT_OPTION_JAR_DIR
   writeConfigKey $CONFIG_FILE $WorldDirKey $DEFAULT_OPTION_WORLD_DIR
+  writeConfigKey $CONFIG_FILE $BackupDirKey $DEFAULT_OPTION_BACKUP_DIR
   writeConfigKey $CONFIG_FILE $JavaMemoryKey $DEFAULT_OPTION_JAVA_MEMORY
   writeConfigKey $CONFIG_FILE $TextEditorKey $DEFAULT_OPTION_TEXT_EDITOR
   writeConfigKey $CONFIG_FILE $ArchiverKey $DEFAULT_OPTION_ARCHIVER
@@ -1244,9 +1329,10 @@ writeDefaultConfig () {
 }
 
 factoryReset () {
-  OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
   OptionJarDir=$DEFAULT_OPTION_JAR_DIR
   OptionWorldDir=$DEFAULT_OPTION_WORLD_DIR
+  OptionBackupDir=$DEFAULT_OPTION_BACKUP_DIR
+  OptionJavaMemory=$DEFAULT_OPTION_JAVA_MEMORY
   OptionTextEditor=$DEFAULT_OPTION_TEXT_EDITOR
   OptionArchiver=$DEFAULT_OPTION_ARCHIVER
   OptionAgreedToEULA=$DEFAULT_OPTION_AGREED_TO_EULA
@@ -1388,11 +1474,11 @@ downloadServer () {
   installer=$(echo $installerJSON | jq -r ".[0].version")
   
   dialogInfo "Creating directories …"
-  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
   mkdir -p $serverDir
 
   dialogInfo "Downloading $serverType server $serverVersion …"
-  download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$serverType-server-$serverVersion.jar"
+  download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$(serverPrefix $serverVersion $serverType).jar"
 
   echo
   echo "#################################"
@@ -1412,7 +1498,7 @@ initServer () {
 
   dialogInfo "Initializing Server …"
   
-  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
   cd $serverDir
   
   resetTerminal
@@ -1421,7 +1507,7 @@ initServer () {
   writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
   writeConfigKey "server.properties" "level-name" "$serverVersion"
 
-  java -jar "$serverType-server-$serverVersion.jar" --initSettings --nogui
+  java -jar "$(serverPrefix $serverVersion $serverType).jar" --initSettings --nogui
 
   cd $SCRIPT_DIR
 
@@ -1443,7 +1529,7 @@ runServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
-  serverDir="$OptionJarDir/$serverType-server-$serverVersion"
+  serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
   cd $serverDir
 
   # Agree to the EULA‌ if we have already agreed to it in the global options
@@ -1462,7 +1548,7 @@ runServer () {
 
   resetTerminal
 
-  java -Xmx"$OptionJavaMemory" -jar "$serverType-server-$serverVersion.jar" --universe $OptionWorldDir --nogui
+  java -Xmx"$OptionJavaMemory" -jar "$(serverPrefix $serverVersion $serverType).jar" --universe $OptionWorldDir --nogui
 
   echo
   echo "#################################"
@@ -1474,6 +1560,7 @@ runServer () {
   resetTerminal
 }
 
+## Instant server. Downloads and runs the most recent stable version.
 
 instantServer () {
   lssv=$(getLatestStableServerVersion $SERVER_TYPE)
@@ -1486,6 +1573,35 @@ instantServer () {
   runServer $lssv $SERVER_TYPE
   menuInstalledServer $lssv $SERVER_TYPE
 }
+
+# Uninstall the server of version $1 and type $2
+
+uninstallServer () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+
+  serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
+
+  if dialogYesNo "Uninstall server" "Warning: This will delete $(textFormatError "everything") under $(textFormatEmphasis $serverDir), including any local world data! Make sure to have a backup of any needed data. Continue?"; then
+    resetTerminal
+    
+    rm -rfv "$serverDir"
+
+    echo
+    echo "#################################"
+    echo "### Server deletion completed ###"
+    echo "#################################"
+    echo
+
+    waitForEnter "return to the installed servers menu"
+
+    buildServerLists
+    menuMain
+    #menuServerList "installed" $serverType # FIXME: Go back to the installed server list without landing in the 18w43b menu thereafter
+  fi
+}
+
+# Command line help
 
 help() {
   echo \
@@ -1627,46 +1743,5 @@ verifyDependency "java" "default-jre-headless"
 verifyDependency "curl" "curl"
 verifyDependency "jq" "jq"
 
-# Prepare everything
-
 init
-
-# Main menu loop
-
-while true; do
-  choice=$(
-  dialog $DIALOG_COMMON --no-cancel --erase-on-exit --title "Main menu" --menu \
-"Welcome to $APP_NAME – $APP_DESC\n\n \
-Launcher version: $APP_VER on $(getDesktop)/$(getKernel) $(getArch)\n \
-Java version: $(getJavaVersion)\n \
-Latest server jar: $(getLatestServerVersion), stable: $(getLatestStableServerVersion), installed: $(getLatestInstalledServerVersion)\n" \
-$MAIN_MENU_SIZE \
-    "r" "Run latest stable server" \
-    "i" "Installed servers" \
-    "s" "Available servers (stable)" \
-    "a" "Available servers (all)" \
-    "u" "Force update list cache" \
-    "o" "Global options" \
-    "x" "Exit $APP_NAME"
-    )
-  
-  case $choice in
-    r)
-      instantServer ;;
-    i)
-      menuServerList "installed" ;;
-    s)
-      menuServerList "stable" ;;
-    a)
-      menuServerList "all" ;;
-    u)
-      onlineWarning "Cannot update the list cache without an internet connection." && cacheFabricMeta
-      buildServerLists ;;
-    o)
-      menuGlobalOptions ;;
-    *)
-      break ;;
-  esac
-done
-
-unInit
+menuMain
