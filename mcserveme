@@ -259,11 +259,32 @@ getArch () {
 # Return the type of graphical session, if any, as specifically as possible
 
 getDesktop () {
-                            desktop=$XDG_CURRENT_DESKTOP
+  # First check whether we are on a non-graphical tty
+
+  desktop=$XDG_SESSION_TYPE
+
+  if [ "$desktop" = "tty" ]; then
+    desktop="TTY"
+    echo $desktop
+    return $FALSE
+  fi
+
+  # Check all eligible environment variables
+  
+  desktop=$XDG_CURRENT_DESKTOP
   [ "$desktop" ]         || desktop=$DESKTOP_SESSION
   [ "$desktop" ]         || desktop=$XDG_SESSION_TYPE
-  [ "$desktop" = "tty" ] && desktop="TTY"
-  [ "$desktop" ]         || return $FALSE
+  [ "$desktop" ]         || desktop=$TERM # This should work on macOS
+
+  # xterm as fallback
+
+  $(echo $desktop | grep -e "^xterm") && desktop="xterm"
+  
+  if [ ! "$desktop" ]; then
+    desktop="unknown DE"
+    echo $desktop
+    return $FALSE
+  fi
 
   echo $desktop
 }
