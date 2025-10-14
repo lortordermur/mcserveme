@@ -396,10 +396,16 @@ followExecutableSymlinks () {
   echo $previousFile
 }
 
-# Check whether command $1 is available in the system and optionally recommend
-# installing the required package $2
+# Check whether the command $1 is available in the system.
 
-checkCommandExists () {
+commandExists () {
+  [ $(command -v $1) ]
+}
+
+# Check whether command $1 is available in the system and optionally recommend
+# installing the required package $2.
+
+verifyDependency () {
   errorText=
   cmd=$1; pkg=$2
   
@@ -1528,9 +1534,9 @@ fi
 
 # Software dependency checks
 
-checkCommandExists "java" "default-jre-headless"
-checkCommandExists "curl" "curl"
-checkCommandExists "jq" "jq"
+verifyDependency "java" "default-jre-headless"
+verifyDependency "curl" "curl"
+verifyDependency "jq" "jq"
 
 # Prepare everything
 
