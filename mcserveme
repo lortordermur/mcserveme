@@ -185,7 +185,8 @@ AgreedToEULAKey="agreed-to-eula"
 NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
 INFO_DELAY="3" # A somewhat longer delay for infobox chains
 LONG_DELAY=$(($INFO_DELAY * 2))
-DIALOG_COMMON_MIN="--colors --column-separator ' ' --sleep $NAVIGATION_DELAY --stdout"
+#IALOG_COMMON_MIN="--colors --column-separator '|' --sleep $NAVIGATION_DELAY --stdout"
+DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 
 # Default dialog sizes
@@ -274,6 +275,27 @@ echo () {
   printf "%b\n" "$*"
 }
 
+# Colored echo
+
+echoRed () {
+  echo "\e[1;31m$@\033[0m"
+}
+
+echoGreen () {
+  echo "\e[1;32m$@\033[0m"
+}
+
+echoBold () {
+  echo "\e[1;37m$@\033[0m"
+}
+
+# Non-interactive error-and-out message for kickstart.
+
+errorExit () {
+  echoRed "$@" 1>&2
+  exit $FALSE
+}
+
 # Return the name of the OS kernel
 
 getKernel () {
@@ -337,7 +359,7 @@ waitForEnter () {
   [ "$1" ] && what=$1
   
   echo
-  echo "\e[1;32mPress Enter to $what …\033[0m"
+  echo "$(echoGreen "Press Enter to $what …")"
   read "enter" 2>&1 > $NOWHERE
   sleep $NAVIGATION_DELAY
 }
@@ -407,13 +429,6 @@ spaceToNBSP () {
 
 NBSPToSpace () {
   sed "s/ / /g"
-}
-
-# Non-interactive error-and-out message for kickstart.
-
-errorExit () {
-  echo "\033[1;31m$@\033[0m" 1>&2
-  exit $FALSE
 }
 
 # Follow a symlink chain starting with $1, which must be an executable (the
@@ -859,15 +874,19 @@ menuInstalledServer () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
+  serverPropFile="$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties"
+  world=$(textFormatEmphasis $(readConfigKey $serverPropFile "level-name"))
+
   while true; do
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Installed server" --menu \
   "Manage the $serverVersion ($serverType) server installation." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
-    "w" "Select world" \
+    "w" "Select world $world" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
+    "o" "$(textFormatError "Optimize world")" \
     "c" "Erase world cache" \
     "u" "Uninstall"
     )
@@ -876,10 +895,12 @@ menuInstalledServer () {
       s)
         runServer $serverVersion $serverType ;;
       w)      
-        continue ;;
+        menuSelectWorld $serverVersion $serverType ;;
       p)
-        $OptionTextEditor "$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties" ;;
+        $OptionTextEditor $serverPropFile ;;
       b)      
+        continue ;;
+      o)      
         continue ;;
       c)
         continue ;;
@@ -892,38 +913,45 @@ menuInstalledServer () {
   done
 }
 
-# World menu for servers
+# World selector for installed servers. $1 is the world name; $2 and $3
+# (optional) are server version and type.
 
-menuWorlds () {
-  serverVersion=$1
-  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+menuSelectWorld () {
+  worldName=$1
+  serverVersion=$2
+  [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
+
+  worlds=$(ls -t1 $OptionWorldDir)
+  worldList=
+  
+  worldList="n <New world> "
+  
+  worldCounter="1"
+  
+  for world in $worlds; do
+    if [ -d $OptionWorldDir/$world ]; then
+      [ -z $world ] && $worldChar=" " || worldChar="*"
+      worldList="$worldList$world $worldChar "
+      worldCounter=$((worldCounter + 1))
+    fi
+  done
 
   while true; do
+
     choice=$(
-    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server world on $serverType-$serverVersion" --menu \
-  "World $worldName (using $worldSize of storage)." \
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "World selection" --menu \
+  "Select a world to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by ($textFormatEmphasis *)." \
   $MAIN_MENU_SIZE \
-    "r" "Rename world" \
-    "b" "Backup/restore" \
-    "p" "Purge world" \
-    "d" "Delete world"
+  $worldList
     )
 
-    case $choice in
-      r)
-        continue ;;
-      m)
-        continue ;;
-      b)
-        continue ;;
-      p)
-        continue ;;
-      d)      
-        continue ;;
-      *)
-        break ;;
-    esac
-
+    if [ -z "$choice" ]; then
+      return $FALSE
+    else
+      echo $choice
+      return $TRUE
+    fi
+    
   done
 }
 
@@ -1508,11 +1536,11 @@ downloadServer () {
   dialogInfo "Downloading $serverType server $serverVersion …"
   download "$FABRIC_API_URL/versions/loader/$serverVersion/$loader/$installer/server/jar" -o "$serverDir/$(serverPrefix $serverVersion $serverType).jar"
 
-  echo
-  echo "#################################"
-  echo "### Server download completed ###"
-  echo "#################################"
-  echo
+  echoBold
+  echoBold "#################################"
+  echoBold "### Server download completed ###"
+  echoBold "#################################"
+  echoBold
   
   initServer $serverVersion $serverType
 }
@@ -1539,11 +1567,11 @@ initServer () {
 
   cd $SCRIPT_DIR
 
-  echo
-  echo "#######################################"
-  echo "### Server initialization completed ###"
-  echo "#######################################"
-  echo
+  echoBold
+  echoBold "#######################################"
+  echoBold "### Server initialization completed ###"
+  echoBold "#######################################"
+  echoBold
 
   [ $KICKSTART = $FALSE ] && waitForEnter "continue"
   resetTerminal
@@ -1576,13 +1604,22 @@ runServer () {
 
   resetTerminal
 
+  echoBold
+  echoBold "########################"
+  echoBold "### LAUNCHING‌ SERVER ###"
+  echoBold "########################"
+  echoBold
+  echoBold "Version: $serverVersion ($serverType)"
+  echoBold "World folder: $OptionWorldDir/$(readConfigKey "server.properties" "level-name")"
+  echoBold
+
   java -Xmx"$OptionJavaMemory" -jar "$(serverPrefix $serverVersion $serverType).jar" --universe $OptionWorldDir --nogui
 
-  echo
-  echo "#################################"
-  echo "### Server shutdown completed ###"
-  echo "#################################"
-  echo
+  echoBold
+  echoBold "#################################"
+  echoBold "### Server shutdown completed ###"
+  echoBold "#################################"
+  echoBold
   
   [ $KICKSTART = $FALSE ] && waitForEnter "return to the launcher"
   resetTerminal
@@ -1615,17 +1652,16 @@ uninstallServer () {
     
     rm -rfv "$serverDir"
 
-    echo
-    echo "#################################"
-    echo "### Server deletion completed ###"
-    echo "#################################"
-    echo
+    echoBold
+    echoBold "#################################"
+    echoBold "### Server deletion completed ###"
+    echoBold "#################################"
+    echoBold
 
     waitForEnter "return to the installed servers menu"
 
     buildServerLists
     menuMain
-    #menuServerList "installed" $serverType # FIXME: Go back to the installed server list without landing in the 18w43b menu thereafter
   fi
 }
 
@@ -1736,7 +1772,7 @@ unInit () {
   saveConfig
 
   echo
-  echo "\e[1;32mThank you for using $APP_NAME!\033[0m May the netherite pickaxe be with you."
+  echoGreen "Thank you for using $APP_NAME! May the netherite pickaxe be with you."
 
   exit $1
 }
