@@ -875,7 +875,7 @@ menuInstalledServer () {
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   serverPropFile="$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties"
-  world=$(textFormatEmphasis $(readConfigKey $serverPropFile "level-name"))
+  world=$(readConfigKey $serverPropFile "level-name")
 
   while true; do
     choice=$(
@@ -883,7 +883,7 @@ menuInstalledServer () {
   "Manage the $serverVersion ($serverType) server installation." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
-    "w" "Select world $world" \
+    "w" "Select world ($(textFormatEmphasis $world))" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
     "o" "$(textFormatError "Optimize world")" \
@@ -895,7 +895,7 @@ menuInstalledServer () {
       s)
         runServer $serverVersion $serverType ;;
       w)      
-        menuSelectWorld $serverVersion $serverType ;;
+        menuSelectWorld $world $serverVersion $serverType ;;
       p)
         $OptionTextEditor $serverPropFile ;;
       b)      
@@ -913,8 +913,8 @@ menuInstalledServer () {
   done
 }
 
-# World selector for installed servers. $1 is the world name; $2 and $3
-# (optional) are server version and type.
+# World selector for installed servers. $1 is the name of the currently used
+# world; $2 and (optionally) $3 are server version and type.
 
 menuSelectWorld () {
   worldName=$1
@@ -922,15 +922,13 @@ menuSelectWorld () {
   [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
 
   worlds=$(ls -t1 $OptionWorldDir)
-  worldList=
+  worldList="<New world>   "
   
-  worldList="n <New world> "
-  
-  worldCounter="1"
+  worldCounter="0"
   
   for world in $worlds; do
     if [ -d $OptionWorldDir/$world ]; then
-      [ -z $world ] && $worldChar=" " || worldChar="*"
+      [ $world = $worldName ] && worldChar="U" || worldChar=" "
       worldList="$worldList$world $worldChar "
       worldCounter=$((worldCounter + 1))
     fi
@@ -940,7 +938,7 @@ menuSelectWorld () {
 
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "World selection" --menu \
-  "Select a world to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by ($textFormatEmphasis *)." \
+  "$worldCounter world(s) found. Select one to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by ‘$(textFormatEmphasis "U")’." \
   $MAIN_MENU_SIZE \
   $worldList
     )
