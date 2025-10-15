@@ -230,6 +230,34 @@ ICON_DIMENSIONS="512" # Dimensions of the bundled desktop icon
 
 KICKSTART=$FALSE # Whether the script was kickstarted
 
+# Custom color scheme for ‘dialog’
+
+UI_COLORS="\n
+screen_color = (GREEN,BLACK,ON)\n
+\n
+shadow_color = (BLACK,BLACK,ON)\n
+\n
+title_color = (YELLOW,WHITE,ON)\n
+\n
+item_selected_color = (YELLOW, GREEN, ON)\n
+tag_selected_color = (YELLOW,GREEN,ON)\n
+button_active_color = (YELLOW,GREEN,ON)\n
+\n
+button_label_active_color = (WHITE,GREEN,ON)\n
+button_key_active_color = (WHITE,GREEN,ON)\n
+tag_key_selected_color = (WHITE,GREEN,ON)\n
+position_indicator_color = (WHITE,GREEN,ON)\n
+\n
+button_inactive_color = (YELLOW,WHITE,OFF)\n
+button_key_inactive_color = (YELLOW,WHITE,OFF)\n
+tag_key_color = (YELLOW,WHITE,OFF)\n
+\n
+tag_color = (BLACK,WHITE,OFF)\n
+\n
+button_label_inactive_color = (BLACK,WHITE,ON)\n
+uarrow_color = (BLACK,WHITE,ON)\n
+darrow_color = (BLACK,WHITE,ON)"
+
 ##############
 # Procedures #
 ##############
@@ -1726,9 +1754,10 @@ processArguments $@
 ! commandExists "dialog" && errorExit "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
 
 # Prepare dialogrc pre-init for a custom color scheme
-# Drop a dialogrc named ‘color’ there to customize the appearance
+# Drop a dialogrc named ‘colors’ there to customize the appearance
 
 export DIALOGRC="$CONFIG_DIR/colors"
+fileExists $DIALOGRC || echo $UI_COLORS > $DIALOGRC
 
 # Root check
 
