@@ -1,6 +1,6 @@
 ![MCServeMe banner logo](mcserveme-banner-logo.png)
 
-## MCServeMe – the terminal based Minecraft Java server launcher
+## MCServeMe – MCJE server launcher for the terminal
 
 This is a text based yet easy to use server launcher for *nix systems. It has been tested on Linux so far, and chances are that it will run out of the box on macOS and *BSD.
 

@@ -66,7 +66,7 @@ FALSE="1"
 
 APP_NAME="MCServeMe"
 SCRIPT_NAME=$(basename $0)
-APP_DESC="the terminal based Minecraft Java server launcher"
+APP_DESC="MCJE server launcher for the terminal"
 APP_VER="v0.01"
 MAINTAINER="lortordermur"
 
