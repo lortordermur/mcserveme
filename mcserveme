@@ -67,7 +67,7 @@ FALSE="1"
 APP_NAME="MCServeMe"
 SCRIPT_NAME=$(basename $0)
 APP_DESC="MCJE server launcher for the terminal"
-APP_VER="v0.01"
+APP_VER="v0.02"
 MAINTAINER="lortordermur"
 
 # Whether we are in developer mode
