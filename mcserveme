@@ -219,7 +219,7 @@ NOWHERE="/dev/null"
 PING_IP="8.8.8.8" # Google DNS
 CONNECTION_TIMEOUT="30" # seconds
 CONNECTION_RETRIES="2"
-USER_AGENT="$APP_NAME $APP_VER$DEV_SUFFIX (curl $(curl --version | head -n 1 | cut -d " " -f 2); $(uname -si))"
+USER_AGENT="$APP_NAME $APP_VER$DEV_SUFFIX (curl $(curl --version | head -n 1 | cut -d " " -f 2); $(uname -si); github.com/$MAINTAINER)"
 
 CURL_OPTIONS="--connect-timeout $CONNECTION_TIMEOUT --retry $CONNECTION_RETRIES"
 CURL_OPTIONS_USER_AGENT="$CURL_OPTIONS --user-agent \"$USER_AGENT\" "
