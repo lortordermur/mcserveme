@@ -394,10 +394,28 @@ directoryEmpty () {
   [ -z $(ls -A $1) ]
 }
 
+# File size in 1024 byte units
+
+fileSizeK () {
+  du -k $1 | cut -f1
+}
+
+# Human-readable file size
+
+fileSizeH () {
+  du -h $1 | cut -f1
+}
+
 # Seconds since the epoch
 
 now () {
-  echo $(date +%s)
+  date +%s
+}
+
+# Human-readable time stamp
+
+nowH () {
+  date +%Y%m%d%H%M%S
 }
 
 # Format dialog text $1 reverse red
@@ -906,7 +924,7 @@ menuInstalledServer () {
       p)
         $OptionTextEditor $serverPropFile ;;
       b)      
-        continue ;;
+        backup $serverVersion $serverType ;;
       o)
         optimizeWorld $world $serverVersion $serverType ;;
       g)
@@ -970,7 +988,7 @@ menuAvailableServer () {
   
   while true; do
     choice=$(
-    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server menu" --menu \
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server" --menu \
   "Options for downloadable servers." \
   $MAIN_MENU_SIZE \
     "i" "Download and install $serverVersion ($serverType)"
@@ -1507,8 +1525,123 @@ purgeWorld () {
   rm -rf "$OptionWorldDir/$world" > $NOWHERE
 
   dialogMessage "World erased" "The world $(TSQ $(textFormatEmphasis $world)) has been purged. If you don’t change the server to another world, it will be recreated on its next invocation."
-  
+
   resetTerminal
+}
+
+# Backup server version $1 of (optionally) type $2 and/or its attached world
+# to time-stamped archives
+
+backup () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+
+  serverPropFile="$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties"
+  world=$(readConfigKey $serverPropFile "level-name")
+
+  archiveCommand=
+  commandLine=
+
+  while true; do
+
+    case $OptionArchiver in
+      tgz)
+        archiveCommand="tar -cvzf" ;;
+      zip)
+        archiveCommand="zip -r" ;;
+      7z)
+        archiveCommand="7zr a -r" ;;
+      *)
+        dialogMessage "Settings error" "Invalid setting for archiver! Please select one in the global options."
+        return $FALSE ;;
+    esac
+
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Backup options" --menu \
+  "What should I do?" \
+  $MAIN_MENU_SIZE \
+    "s" "Backup server ($(textFormatEmphasis $serverVersion))" \
+    "w" "Backup world ($(textFormatEmphasis $world))" \
+    "a" "Select archiver" \
+    "p" "Set backup path"
+    )
+
+    case $choice in
+      s)
+        cd $OptionJarDir
+
+        dialogYesNo "Server backup" "Perform the server backup to $(textFormatEmphasis $OptionBackupDir) in $(textFormatEmphasis $OptionArchiver) format?" || continue
+        backupFileName="$(serverPrefix $serverVersion $serverType)-$(nowH).$OptionArchiver"
+        commandLine="$archiveCommand $backupFileName $(serverPrefix $serverVersion $serverType)/"
+
+        resetTerminal
+        echoBold "Creating server backup archive …"
+        echoBold
+
+        $commandLine
+
+        [ "$?" -ne "0" ] && dialogMessage "Error" "Could not create the backup archive: error $?!" && break
+
+        echoBold
+        echoBold "Moving the backup archive to the backup location …"
+        echoBold
+
+        mv -fv $backupFileName $OptionBackupDir
+
+        [ "$?" -ne "0" ] && dialogMessage "Error" "Could not move the backup archive: error $?!" && break
+
+        echoBold
+        echoBold "Done. File size: $(fileSizeH "$OptionBackupDir/$backupFileName")"
+        echoBold
+
+        waitForEnter "continue"
+        resetTerminal
+
+        dialogMessage "Backup completed" "The server $(TSQ "$serverVersion" "($serverType)") has been backed up to $OptionBackupDir/$(textFormatEmphasis $backupFileName)." ;;
+      w)
+        cd $OptionWorldDir
+
+        dialogYesNo "World backup" "Perform a world backup to $(textFormatEmphasis $OptionBackupDir) in $(textFormatEmphasis $OptionArchiver) format?" || continue
+
+        backupFileName="world-$world-$(nowH).$OptionArchiver"
+        commandLine="$archiveCommand $backupFileName $world/"
+
+        resetTerminal
+        echoBold "Creating world backup archive …"
+        echoBold
+
+        $commandLine
+
+        [ "$?" -ne "0" ] && dialogMessage "Error" "Could not create the backup archive: error $?!" && break
+
+        echoBold
+        echoBold "Moving the backup archive to the backup location …"
+        echoBold
+
+        mv -fv $backupFileName $OptionBackupDir
+
+        [ "$?" -ne "0" ] && dialogMessage "Error" "Could not move the backup archive: error $?!" && break
+
+        echoBold
+        echoBold "Done. File size: $(fileSizeH "$OptionBackupDir/$backupFileName")"
+        echoBold
+
+        waitForEnter "continue"
+        resetTerminal
+
+        dialogMessage "Backup completed" "The world $(TSQ "$world") has been backed up to $OptionBackupDir/$(textFormatEmphasis $backupFileName)." ;;
+      a)
+        optionUIArchiver ;;
+      p)
+        optionUIBackupFolder ;;
+      *)
+        break ;;
+    esac
+
+  done
+
+  cd $SCRIPT_DIR
+  return;
 }
 
 # Return true if we have internet connectivity
