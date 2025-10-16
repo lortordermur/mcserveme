@@ -2,7 +2,7 @@
 
 ## MCServeMe – MCJE server launcher for the terminal
 
-This is a text based yet easy to use server launcher for *nix systems. It has been tested on Linux so far, and chances are that it will run with minor tweaks on macOS and *BSD.
+This is a text based yet easy to use Minecraft server launcher for *nix systems. It has been tested on Linux so far, and chances are that it will run with minor tweaks on macOS and *BSD.
 
 The projects’s aim is to provide something like [Prism Launcher](https://prismlauncher.org/) but for servers. To that end MCServeMe allows keeping different versions of the Minecraft Java server around. That comes in handy if you have older worlds that rely on a specific world generation, or you prefer to use an older client.
 
@@ -15,7 +15,7 @@ You can tweak a fair number of settings, however if you don't care much about th
 - Comfortably manage and run multiple server versions
 - Server and world backups
 - Kickstart mode (via `-k`/`--kickstart` command line switch): Downloads (if necessary) and runs the newest server without any user interaction
-- Lightweight dependencies: `dialog`, `curl` and `jq`, plus a current Java runtime for the servers
+- Lightweight dependencies: `dialog`, `curl` and `jq`, plus a current Java runtime for the servers. For backups you need either `tar` + `gzip`, `zip` or `7zr`
 
 ---
 
@@ -71,7 +71,7 @@ MCServeMe is in an early stage of development and there is still a lot to come. 
 
 - Launching servers and selecting worlds directly from the command line
 - Making backups from the command line, e.g. in a cronjob
-- Editing the most important server.properties settings via a UI
+- Editing the most important `server.properties` settings via a UI
 - Downloading and managing of server optimization mods
 - Editing the whitelist and ops list via a UI
 - Directory selection dialogs
