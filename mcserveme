@@ -1,8 +1,8 @@
 #!/bin/sh
 
-#################################################################
-# MCServeMe – the terminal based Minecraft Java server launcher #
-#################################################################
+#####################################################
+# MCServeMe – MCJE server launcher for the terminal #
+#####################################################
 
 # This is free and unencumbered software released into the public domain.
 # 
@@ -39,16 +39,11 @@
 # - jq
 # - Any current Java runtime
 
-# Optional dependencies:
+# Optional dependencies for backups:
 #
-# For moving data around more reliably:
-# - rsync
-#
-# For backups:
 # - zip
 # - tar + gzip
-# - 7za
-# - rar
+# - 7zr
 
 ##################################
 # Global constants and variables #
@@ -1868,17 +1863,17 @@ help() {
 
 Usage: $SCRIPT_NAME <arg>
 
-  -n, --no-auto-cache
-  Prevents $APP_NAME from automatically refreshing the API cache on startup.
-  It can still be refreshed manually from the main menu. This is useful for
-  systems that are not always connected to the internet.
+  -h, --help
+  This help screen.
   -k, --kickstart [type]
   Directly run the latest stable server version–downloading, installing and
   initializing it if necessary–and exit afterwards. This skips all user
   interaction except a pending EULA agreement, in which case it quits with an
   error message.
-  -h, --help
-  This help screen."
+  -n, --no-auto-cache
+  Prevents $APP_NAME from automatically refreshing the list cache on startup.
+  It can still be refreshed manually from the main menu. This is useful for
+  systems that are not always connected to the internet."
   
   # TODO:
   # -r, --run <version> [type]
@@ -1892,13 +1887,13 @@ processArguments () {
   while [ "$1" ]; do
     # TODO: Shift the parameters so we can combine them
     case $1 in
-      -n|--no-auto-cache)
-        AUTO_CACHE=$FALSE ;;
-      -k|--kickstart)
-        KICKSTART=$TRUE ;;
       -h|--help)
         help
         exit $TRUE ;;
+      -k|--kickstart)
+        KICKSTART=$TRUE ;;
+      -n|--no-auto-cache)
+        AUTO_CACHE=$FALSE ;;
       *)
         echo "Unknown parameter! Try --help"
         exit $FALSE ;;
