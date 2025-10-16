@@ -29,7 +29,7 @@ Furthermore I recommend using MCServeMe only for operating small-scale private s
 
 ### Installation
 
-MCServeMe comes as a single shell script with a README and a license file plus a couple of desktop assets. You can simply launch the `mcserveme` script file and you are good to go. For added convenience there is an entry in the global options menu for installing the script to `~/.local/bin` where it is (likely) in the $PATH. You can also have a desktop icon and menu entry installed if the computer is running an XDG compliant graphical desktop environment, such as KDE or GNOME.
+MCServeMe comes as a single shell script with a README and a license file plus a couple of desktop assets. You can simply launch the `mcserveme` script file and you are good to go. For added convenience there is an entry in the global options menu for installing the script to `~/.local/bin` where it is (likely) in the $PATH. You can also have a desktop icon and menu entry installed if the computer is running an XDG compliant graphical desktop environment such as KDE or GNOME.
 
 ---
 
@@ -77,7 +77,7 @@ MCServeMe is in an early stage of development and there is still a lot to come. 
 - Directory selection dialogs
 - Restore backups
 - Renaming of worlds
-- Make a flatpak
+- A flatpak for easy distribution
 
 ---
 
@@ -86,6 +86,6 @@ MCServeMe is in an early stage of development and there is still a lot to come. 
 If you would like to contribute you can help the project in several ways:
 
 - Test the script on different platforms (Linux distros other than the *buntus; macOS, *BSD etc.). I am quite positive that it can run fine on most common Unices with only minor tweaks. It might even run on WSL in Windows, although I am not sure why someone would try that.
-- Leave some feedback, constructive criticism or praise in the official Reddit sub.
+- Leave some feedback, constructive criticism or praise in [the official Reddit sub](https://www.reddit.com/r/MCServeMe/).
 - Make a (blog/video) review or showcase to maybe get some people interested
 - If you found glitches or bugs in MCServeMe, or have a feature request, please [open an issue](https://github.com/lortordermur/mcserveme/issues).
