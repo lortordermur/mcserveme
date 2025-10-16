@@ -73,8 +73,8 @@ Alas, the Fabric mod loader has not existed for that long. Hence the erliest sna
 - Directory selection dialogs
 - Downloading and managing of server optimization mods
 - Editing the whitelist and ops list
-- World and settings backups
-- Multiple worlds per server
+- Renaming of worlds
+- Restore backups
 - Make a flatpak
 
 ---

@@ -424,6 +424,18 @@ NBSPToSpace () {
   sed "s/ / /g"
 }
 
+# Enclose the argument(s) in typographic single quotes
+
+TSQ () {
+  echo "‘$@’"
+}
+
+# Enclose the argument(s) in typographic double quotes
+
+TDQ () {
+  echo "“$@”"
+}
+
 # Follow a symlink chain starting with $1, which must be an executable (the
 # path portion may be omitted if it is in the search path). If anything is
 # given as a second argument, for example "verbose", the output is verbose
@@ -460,12 +472,12 @@ verifyDependency () {
   if ! commandExists $cmd; then
 
     if [ $KICKSTART = $TRUE ]; then
-      errorText="Dependency error: Command ‘$cmd’ is not available!"
-      [ $pkg ] && errorText="$errorText Try installing the ‘$pkg’ package. --Exiting."
+      errorText="Dependency error: Command $(TSQ $cmd) is not available!"
+      [ $pkg ] && errorText="$errorText Try installing the $(TSQ $pkg) package. --Exiting."
       errorExit "$errorText"
     else
-      errorText="Command ‘$(textFormatError $cmd)’ is not available!"
-      [ $pkg ] && errorText="$errorText Please install the ‘$(textFormatError $pkg)’ package. Exiting."
+      errorText="Command $(TSQ $(textFormatError $cmd)) is not available!"
+      [ $pkg ] && errorText="$errorText Please install the $(TSQ $(textFormatError $pkg)) package. Exiting."
       dialogMessage "Required dependency missing" "$errorText"
     fi
 
@@ -484,15 +496,15 @@ detectTextEditor () {
     sleep $INFO_DELAY
   elif commandExists "editor"; then # On systems with update-alternatives
     target=$(followExecutableSymlinks editor)
-    dialogInfo "‘editor’ symlink is present, pointing to $(textFormatEmphasis $target) …"
+    dialogInfo "$(TSQ "editor") symlink is present, pointing to $(TSQ $(textFormatEmphasis $target)) …"
     editor="editor"
     sleep $INFO_DELAY
   elif commandExists "$DEFAULT_OPTION_TEXT_EDITOR"; then
-    dialogInfo "Using internal default ‘$DEFAULT_OPTION_TEXT_EDITOR’ …"
+    dialogInfo "Using internal default $TSQ($DEFAULT_OPTION_TEXT_EDITOR) …"
     editor=$DEFAULT_OPTION_TEXT_EDITOR
     sleep $INFO_DELAY
   else
-    dialogInfo "‘$DEFAULT_OPTION_TEXT_EDITOR’ not found, falling back to ‘vi’ …"
+    dialogInfo "$(TSQ $DEFAULT_OPTION_TEXT_EDITOR) not found, falling back to $(TSQ "vi") …"
     editor="vi" # Should be installed just about everywhere
     sleep $INFO_DELAY
   fi
@@ -706,7 +718,7 @@ buildServerLists () {
   NumStableServerVersions="0"
   NumInstalledServerVersions="0"
 
-  dialogInfo "Building server lists for server type ‘$serverType’ …"
+  dialogInfo "Building server lists for server type $(TSQ $serverType) …"
 
   serverCounter="0"
 
@@ -830,7 +842,7 @@ menuServerList () {
       menuList=$ServerVersionListInstalled
       howMany=$NumInstalledServerVersions
       if [ $howMany = "0" ]; then
-        dialogMessage "No servers" "You do not have any servers installed! Please pick one from the ‘stable’ or ‘all’ list."
+        dialogMessage "No servers" "You do not have any servers installed! Please pick one from the $(TSQ "stable") or $(TSQ "all") list."
         return $FALSE
       fi ;;
     stable)
@@ -846,7 +858,7 @@ menuServerList () {
   while true; do
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server selection ($serverSubset)" --menu \
-  "$howMany $serverType server(s) found. Select a server jar to download, manage or launch.\n\n \
+  "$howMany $serverType server(s) found.\n\n \
   I = installed, a = available, S = stable, u = unstable" \
   $MAIN_MENU_SIZE \
     $menuList
@@ -874,13 +886,14 @@ menuInstalledServer () {
 
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Installed server" --menu \
-  "Manage the $serverVersion ($serverType) server installation." \
+  "Manage the $(TSQ $serverVersion $serverType) server installation and the currently attached world $(TSQ $world)." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
     "w" "Select world ($(textFormatEmphasis $world))" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
     "o" "$(textFormatError "Optimize world")" \
+    "g" "$(textFormatError "Purge world")" \
     "u" "Uninstall"
     )
 
@@ -896,6 +909,8 @@ menuInstalledServer () {
         continue ;;
       o)
         optimizeWorld $world $serverVersion $serverType ;;
+      g)
+        purgeWorld $world ;;
       u)
         uninstallServer $serverVersion $serverType ;;
       *)
@@ -932,7 +947,7 @@ menuSelectWorld () {
 
   choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "World selection" --menu \
-  "$worldCounter world(s) found. Select one to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by ‘$(textFormatEmphasis "U")’." \
+  "$worldCounter world(s) found. Select one to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by $(TSQ $(textFormatEmphasis "U"))." \
   $MAIN_MENU_SIZE \
   $worldList
     )
@@ -1452,18 +1467,18 @@ optimizeWorld () {
   serverType=$3
   [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
 
-  [ -z $world ] && dialogMessage "Error" "World folder of ‘$(textFormatEmphasis $world)’not found!"
+  [ -z $world ] && dialogMessage "Error" "World folder of $(TSQ $(textFormatEmphasis $world))’not found!"
   
-  dialogYesNo "Optimize $world" "Upgrade to the newest world format? This will force recalculation of world data, and the world may become incompatible with older server versions." || return
+  dialogYesNo "Optimize $world" "Upgrade to the newest world format? This will force recalculation of world data on the next server invocation, and the world may become $(textFormatError "incompatible") with older server versions." || return
 
+  dialogInfo "Starting the server … type $(TSQ "/stop") in the console for shutdown."
+  sleep $LONG_DELAY
+  
   serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
   cd $serverDir
 
   resetTerminal
-  
-  echoBold "Starting the server …"
-  echoBold
-  
+
   java -Xmx"$OptionJavaMemory" -jar "$(serverPrefix $serverVersion $serverType).jar" --universe $OptionWorldDir --forceUpgrade --eraseCache --nogui
   
   echoBold
@@ -1475,6 +1490,25 @@ optimizeWorld () {
   resetTerminal
   
   cd $SCRIPT_DIR
+}
+
+# Purge the contents of world $1, optionally deleting it entirely by removing
+# the folder.
+
+purgeWorld () {
+  world=$1
+
+  [ ! -d "$OptionWorldDir/$world" ] && dialogMessage "World does not exist" "There is no world data to erase. Start the server to recreate the world, or change it to another world." && return
+
+  dialogOkCancel "Confirm world purge" "This will erase all contents of the world $(TSQ $(textFormatEmphasis $world)), including $(textFormatError "everything you built")!" || return
+
+  dialogInfo "Deleting world contents …"
+  
+  rm -rf "$OptionWorldDir/$world" > $NOWHERE
+
+  dialogMessage "World erased" "The world $(TSQ $(textFormatEmphasis $world)) has been purged. If you don’t change the server to another world, it will be recreated on its next invocation."
+  
+  resetTerminal
 }
 
 # Return true if we have internet connectivity
@@ -1621,10 +1655,10 @@ runServer () {
   writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
   
   if [ $KICKSTART = $TRUE ]; then
-    dialogInfo "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type $(textFormatEmphasis "/stop") in the console to shut down the server."
+    dialogInfo "Launching $(TSQ $(textFormatEmphasis $serverVersion \($serverType\)))’. Type $(TSQ $(textFormatEmphasis "/stop")) in the console to shut down the server."
     sleep $LONG_DELAY
   else
-    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
+    dialogOkCancel "Launching server" "Launching $(TSQ $(textFormatEmphasis $serverVersion \($serverType\)))’. Type the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
   fi
     
   resetTerminal
@@ -1658,7 +1692,7 @@ instantServer () {
   lssv=$(getLatestStableServerVersion $SERVER_TYPE)
 
   if ! isServerInstalled $lssv $SERVER_TYPE; then
-    dialogYesNo "Server download" "The latest stable server is not installed. Download the $(textFormatEmphasis "‘$lssv ($serverType)’") server?" || return
+    dialogYesNo "Server download" "The latest stable server is not installed. Download the $(TSQ $(textFormatEmphasis $(lssv $serverType))) server?" || return
     downloadServer $lssv $SERVER_TYPE
   fi
 
@@ -1814,7 +1848,7 @@ processArguments $@
 
 # Check for the UI toolkit
 
-! commandExists "dialog" && errorExit "ERROR: The ‘dialog’ command is missing! Please install the ‘dialog’ package."
+! commandExists "dialog" && errorExit "ERROR: The $(TSQ "dialog") command is missing! Please install the $(TSQ "dialog") package."
 
 # Prepare dialogrc pre-init for a custom color scheme
 # Drop a dialogrc named ‘colors’ there to customize the appearance
