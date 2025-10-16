@@ -881,7 +881,6 @@ menuInstalledServer () {
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
     "o" "$(textFormatError "Optimize world")" \
-    "c" "Erase world cache" \
     "u" "Uninstall"
     )
 
@@ -895,10 +894,8 @@ menuInstalledServer () {
         $OptionTextEditor $serverPropFile ;;
       b)      
         continue ;;
-      o)      
-        continue ;;
-      c)
-        continue ;;
+      o)
+        optimizeWorld $world $serverVersion $serverType ;;
       u)
         uninstallServer $serverVersion $serverType ;;
       *)
@@ -1445,6 +1442,41 @@ writeConfigKey () {
   fi
 }
 
+# Force upgrade world $1 and erase the cache. Do this using server version $2
+# of (optionally) type $3.
+
+optimizeWorld () {
+  world=$1
+  
+  serverVersion=$2
+  serverType=$3
+  [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
+
+  [ -z $world ] && dialogMessage "Error" "World folder of ‘$(textFormatEmphasis $world)’not found!"
+  
+  dialogYesNo "Optimize $world" "Upgrade to the newest world format? This will force recalculation of world data, and the world may become incompatible with older server versions." || return
+
+  serverDir="$OptionJarDir/$(serverPrefix $serverVersion $serverType)"
+  cd $serverDir
+
+  resetTerminal
+  
+  echoBold "Starting the server …"
+  echoBold
+  
+  java -Xmx"$OptionJavaMemory" -jar "$(serverPrefix $serverVersion $serverType).jar" --universe $OptionWorldDir --forceUpgrade --eraseCache --nogui
+  
+  echoBold
+  echoBold "Done!"
+  echoBold
+  
+  waitForEnter "continue"
+  
+  resetTerminal
+  
+  cd $SCRIPT_DIR
+}
+
 # Return true if we have internet connectivity
 
 online () {
@@ -1595,8 +1627,6 @@ runServer () {
     dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
   fi
     
-  cd $SCRIPT_DIR
-
   resetTerminal
 
   echoBold
@@ -1618,6 +1648,8 @@ runServer () {
   
   [ $KICKSTART = $FALSE ] && waitForEnter "return to the launcher"
   resetTerminal
+
+  cd $SCRIPT_DIR
 }
 
 ## Instant server. Downloads and runs the most recent stable version.
