@@ -412,13 +412,6 @@ textFormatEmphasis () {
   echo "\Z0\Zr $* \Zn"
 }
 
-# Replace spaces with non-break spaces. Use this when passing a server version
-# with spaces in the name.
-
-nameWithSpaces () {
-  echo "$1" | NBSPToSpace
-}
-
 # Convert spaces from stdin to no-break spaces.
 
 spaceToNBSP () {
@@ -875,9 +868,10 @@ menuInstalledServer () {
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
   
   serverPropFile="$OptionJarDir/$(serverPrefix $serverVersion $serverType)/server.properties"
-  world=$(readConfigKey $serverPropFile "level-name")
 
   while true; do
+    world=$(readConfigKey $serverPropFile "level-name")
+
     choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Installed server" --menu \
   "Manage the $serverVersion ($serverType) server installation." \
@@ -895,7 +889,8 @@ menuInstalledServer () {
       s)
         runServer $serverVersion $serverType ;;
       w)      
-        menuSelectWorld $world $serverVersion $serverType ;;
+        w=$(menuSelectWorld $world $serverVersion $serverType)
+        [ "$w" ] && writeConfigKey $serverPropFile "level-name" $w ;;
       p)
         $OptionTextEditor $serverPropFile ;;
       b)      
@@ -922,7 +917,7 @@ menuSelectWorld () {
   [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
 
   worlds=$(ls -t1 $OptionWorldDir)
-  worldList="<New world>   "
+  worldList=$newWorld
   
   worldCounter="0"
   
@@ -936,7 +931,9 @@ menuSelectWorld () {
 
   while true; do
 
-    choice=$(
+  [ ! $worldCounter ] && dialogMessage "Error" "No worlds found in $(textFormatEmphasis $OptionWorldDir)!" && return $FALSE
+
+  choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "World selection" --menu \
   "$worldCounter world(s) found. Select one to use with the $serverVersion ($serverType) server installation. The currently used world is indicated by ‘$(textFormatEmphasis "U")’." \
   $MAIN_MENU_SIZE \
@@ -1595,7 +1592,7 @@ runServer () {
     dialogInfo "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type $(textFormatEmphasis "/stop") in the console to shut down the server."
     sleep $LONG_DELAY
   else
-    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Use the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
+    dialogOkCancel "Launching server" "Launching ‘$(textFormatEmphasis $serverVersion \($serverType\))’. Type the $(textFormatEmphasis "/stop") console command to cleanly exit and return to the launcher." || return $FALSE
   fi
     
   cd $SCRIPT_DIR
