@@ -44,6 +44,8 @@
 # - zip
 # - tar + gzip
 # - 7zr
+#
+# TODO: If available use rsync for copy/move file operations
 
 ##################################
 # Global constants and variables #
@@ -62,7 +64,7 @@ FALSE="1"
 APP_NAME="MCServeMe"
 SCRIPT_NAME=$(basename $0)
 APP_DESC="MCJE server launcher for the terminal"
-APP_VER="v0.02"
+APP_VER="v0.03"
 MAINTAINER="lortordermur"
 
 # Whether we are in developer mode
@@ -85,7 +87,7 @@ FABRIC_API_URL="https://meta.fabricmc.net/v2"
 
 # Common API‌ constants
 
-API_CACHE_INTERVAL="3600" # seconds
+LIST_CACHE_INTERVAL="14400" # seconds
 
 # Filesystem related stuff
 
@@ -180,7 +182,6 @@ AgreedToEULAKey="agreed-to-eula"
 NAVIGATION_DELAY="1" # Seconds of delay after interacting with a dialog
 INFO_DELAY="3" # A somewhat longer delay for infobox chains
 LONG_DELAY=$(($INFO_DELAY * 2))
-#IALOG_COMMON_MIN="--colors --column-separator '|' --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON_MIN="--colors --sleep $NAVIGATION_DELAY --stdout"
 DIALOG_COMMON="$DIALOG_COMMON_MIN --defaultno --scrollbar"
 
@@ -1930,7 +1931,7 @@ init () {
 
   onlineWarning "It seems there is no internet connection. Some functionality will be limited."
   
-  [ $AUTO_CACHE = $TRUE ] && online && needToCache $GAME_VER_FILE $API_CACHE_INTERVAL && cacheFabricMeta
+  [ $AUTO_CACHE = $TRUE ] && online && needToCache $GAME_VER_FILE $LIST_CACHE_INTERVAL && cacheFabricMeta
   
   [ $KICKSTART = $FALSE ] && buildServerLists
   

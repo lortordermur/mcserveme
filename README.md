@@ -45,7 +45,7 @@ MCServeMe furthermore features a number of command line parameters as well–wit
 
 **It seems that MCServeMe is sometimes “caching” something during startup, what is happening?**
 
-MCServeMe regularly downloads a list of available server jars and other components using the Fabric API into a cache directory. The interval is every hour. To disable this feature and only update manually from the main menu start MCServeMe with the `-n`/`--no-auto-cache` parameter.
+MCServeMe regularly downloads a list of available server jars and other components using the Fabric API into a cache directory. The default interval is every four hours. To disable this feature and only update manually from the main menu start MCServeMe with the `-n`/`--no-auto-cache` parameter.
 
 **A word is missing here and there in some of the dialogs. Are those spelling errors?**
 
