@@ -29,7 +29,7 @@ Furthermore I recommend using MCServeMe only for operating small-scale private s
 
 ### Installation
 
-MCServeMe comes as a single shell script with a README and a license file plus a couple of desktop assets. You can simply launch the `mcserveme` script file and you are good to go. For added convenience there is an entry in the global options menu for installing the script to `~/.local/bin` where it is (likely) in the $PATH. You can also have a desktop icon and menu entry installed if the computer is running an XDG compliant graphical desktop environment such as KDE or GNOME.
+MCServeMe comes as a single shell script with a README and a license file plus a couple of optional desktop assets. You can simply launch the `mcserveme` script file and you are good to go. For added convenience there is an entry in the global options menu for installing the script to `~/.local/bin` where it is (likely) in the $PATH. You can also have a desktop icon and menu entry installed if the computer is running an XDG compliant graphical desktop environment such as KDE or GNOME.
 
 ---
 
