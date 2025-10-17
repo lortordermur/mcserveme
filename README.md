@@ -53,7 +53,7 @@ Language proficiency is not the issue here (although English is not my first lan
 
 **I think that the color scheme looks a bit plain.**
 
-Don’t despair, MCServeMe features support for a custom `dialogrc`. First you need to tell `dialog` to create a file with color definitions and some general settings:
+Don’t despair, MCServeMe features support for a custom `dialogrc`. First you need to delete the auto-generated file `~/.config/MCServeMe/colors` and tell `dialog` to create a default configuration with color definitions and some general settings:
 
 `dialog --create-rc ~/.config/MCServeMe/colors`
 
@@ -86,6 +86,6 @@ MCServeMe is in an early stage of development and there is still a lot to come. 
 If you would like to contribute you can help the project in several ways:
 
 - Test the script on different platforms (Linux distros other than the *buntus; macOS, *BSD etc.). I am quite positive that it can run fine on most common Unices with only minor tweaks. It might even run on WSL in Windows, although I am not sure why someone would try that.
-- Leave some feedback, constructive criticism or praise in [the official Reddit sub](https://www.reddit.com/r/MCServeMe/).
+- Leave some feedback, constructive criticism or praise in [the official Reddit sub](https://www.reddit.com/r/MCServeMe/) or [the Discord channel](https://discord.gg/9dYDtp8kBd).
 - Make a (blog/video) review or showcase to maybe get some people interested
 - If you found glitches or bugs in MCServeMe, or have a feature request, please [open an issue](https://github.com/lortordermur/mcserveme/issues).
