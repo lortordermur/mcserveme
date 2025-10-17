@@ -706,7 +706,8 @@ cacheEULA () {
 # The results are stored in the global server lists:
 # ServerVersionList, ServerVersionListStable and ServerVersionListInstalled
 
-# TODO: Set this up for different server types (Fabric, vanilla etc.)
+# TODO: Set this up for different server types (Fabric, vanilla etc.), and
+# loop through all types when no argument is given
 
 buildServerLists () {
   if ! fileExists $GAME_VER_FILE; then
@@ -1765,7 +1766,9 @@ initServer () {
   [ $KICKSTART = $FALSE ] && waitForEnter "continue"
   resetTerminal
 
-  [ $KICKSTART = $FALSE ] && buildServerLists
+  # FIXME: Server initially shows as not installed in the server list
+
+  [ $KICKSTART = $FALSE ] && buildServerLists $serverType
 }
 
 # Run the server of version $1 and (optionally) type $2
@@ -1820,7 +1823,7 @@ instantServer () {
   lssv=$(getLatestStableServerVersion $SERVER_TYPE)
 
   if ! isServerInstalled $lssv $SERVER_TYPE; then
-    dialogYesNo "Server download" "The latest stable server is not installed. Download the $(TSQ $(textFormatEmphasis $(lssv $serverType))) server?" || return
+    dialogYesNo "Server download" "The latest stable server is not installed. Download the $(TSQ $(textFormatEmphasis $lssv $serverType)) server?" || return
     downloadServer $lssv $SERVER_TYPE
   fi
 
@@ -1849,7 +1852,7 @@ uninstallServer () {
 
     waitForEnter "return to the installed servers menu"
 
-    buildServerLists
+    buildServerLists $serverType
     menuMain
   fi
 }
