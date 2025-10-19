@@ -1984,7 +1984,7 @@ unInit () {
   echo
   echoGreen "Thank you for using $APP_NAME! May the netherite pickaxe be with you."
 
-  exit $1
+  [ "$1" ] && exit $1 || exit 0
 }
 
 ################
