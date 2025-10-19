@@ -227,6 +227,9 @@ ICON_DIMENSIONS="512" # Dimensions of the bundled desktop icon
 
 KICKSTART=$FALSE # Whether the script was kickstarted
 
+DEFAULT_ABBREV_LENGTH="78" # default abbreviation length for text shortener
+DEFAULT_ABBREV_LENGTH_MENU="40" # default text abbreviation length in menus
+
 # Custom color scheme for ‘dialog’
 
 UI_COLORS="\n
@@ -448,6 +451,19 @@ TSQ () {
 
 TDQ () {
   echo "“$@”"
+}
+
+# Shorten the string $1 to max. $2 characters, including a trailing ellipsis
+
+abbreviateString () {
+  abbrevLength=$2
+  [ -z "$2" ] && abbrevLength=$DEFAULT_ABBREV_LENGTH
+  
+  abbrevString=$(printf "%.*s" "$abbrevLength" "$1")
+  abbrevStringLength=$(echo $abbrevString | wc -m)
+  [ "$abbrevStringLength" -lt "$2" ] || abbrevString="$abbrevString…"
+  
+  echo $abbrevString
 }
 
 # Follow a symlink chain starting with $1, which must be an executable (the
@@ -1009,11 +1025,11 @@ menuGlobalOptions () {
   "Global and default options." \
   $MAIN_MENU_SIZE \
     "m" "Java memory" \
-    "j" "Server jar root folder" \
-    "w" "World root folder" \
-    "b" "Backup folder" \
-    "e" "Default text editor" \
-    "a" "Default archiver" \
+    "j" "Server jar root folder ($(textFormatEmphasis $(abbreviateString $OptionJarDir $DEFAULT_ABBREV_LENGTH_MENU)))" \
+    "w" "World root folder ($(textFormatEmphasis $(abbreviateString $OptionWorldDir $DEFAULT_ABBREV_LENGTH_MENU)))" \
+    "b" "Backup folder ($(textFormatEmphasis $(abbreviateString $OptionBackupDir $DEFAULT_ABBREV_LENGTH_MENU)))" \
+    "e" "Default text editor ($(textFormatEmphasis $(abbreviateString $OptionTextEditor $DEFAULT_ABBREV_LENGTH_MENU)))" \
+    "a" "Default archiver ($(textFormatEmphasis $(abbreviateString $OptionArchiver $DEFAULT_ABBREV_LENGTH_MENU)))" \
     "i" "Install $APP_NAME" \
     "u" "Uninstall $APP_NAME" \
     "g" "Agree to the Minecraft EULA" \
@@ -1559,8 +1575,8 @@ backup () {
   $MAIN_MENU_SIZE \
     "s" "Backup server ($(textFormatEmphasis $serverVersion))" \
     "w" "Backup world ($(textFormatEmphasis $world))" \
-    "a" "Select archiver" \
-    "p" "Set backup path"
+    "a" "Select archiver ($(textFormatEmphasis $(abbreviateString $OptionArchiver $DEFAULT_ABBREV_LENGTH_MENU)))" \
+    "p" "Set backup path ($(textFormatEmphasis $(abbreviateString $OptionBackupDir $DEFAULT_ABBREV_LENGTH_MENU)))" \
     )
 
     case $choice in
