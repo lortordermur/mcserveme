@@ -384,7 +384,8 @@ fileAccessible () {
 # Last modified time of file $1 in epoch seconds
 
 fileLastModified () {
-  echo $(stat -c %Y "$1")
+  #echo $(stat -c %Y "$1") # GNUism
+  echo $(date -r "$1" +%s)
 }
 
 # Check if directory $1 is empty
