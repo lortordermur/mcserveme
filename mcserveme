@@ -85,6 +85,10 @@ SERVER_TYPE_NAME="Fabric"
 
 FABRIC_API_URL="https://meta.fabricmc.net/v2"
 
+# Modrinth API
+
+MODRINTH_API_URL="https://api.modrinth.com/v2"
+
 # Common API‌ constants
 
 LIST_CACHE_INTERVAL="14400" # seconds
@@ -127,11 +131,13 @@ EULA_URL="www.minecraft.net/eula"
 EULA_FILENAME="EULA"
 EULA_FILE="$DOCS_CACHE_DIR/$EULA_FILENAME"
 
-AUTO_CACHE=$TRUE # Whether we want to update the API cache files on startup
+AUTO_CACHE=$TRUE # Whether we want to update the list cache files on startup
 
 GAME_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-gameversions"
 LOADER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-loaderversions"
 INSTALLER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-installerversions"
+
+MOD_LIST_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-modlist"
 
 # The three server version list “arrays”
 
@@ -553,7 +559,7 @@ getJavaVersion () {
 # constants and $2 the URL to download from
 
 download () {
-  curl -s $@
+  curl -s $*
 }
 
 # Check whether a server version is installed. $1 is the version as displayed
@@ -659,7 +665,7 @@ getLatestInstalledServerVersion () {
 }
 
 # Check whether we need to update something in the cache. $1 is a single
-# filename, $2 is the update interval in seconds
+# filename (to check its modification time), $2 the update interval in seconds
 
 needToCache () {
   file=$1
@@ -676,6 +682,10 @@ needToCache () {
     timeLastCaching=$(fileLastModified $file)
     timeDiff=$(($timeNow - $timeLastCaching))
     [ "$timeDiff" -ge "$interval" ] && ret=$TRUE
+  else # If file does not exist, always cache
+    touch $file
+    timeLastCaching=$timeNow
+    ret=$TRUE
   fi
 
   return $ret
@@ -686,6 +696,7 @@ needToCache () {
 
 cacheFabricMeta () {
   dialogInfo "Caching game versions …"
+
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/game" > $GAME_VER_FILE
   
   if [ ! -s "$GAME_VER_FILE" ] && fileExists $GAME_VER_FILE; then
@@ -703,9 +714,50 @@ cacheFabricMeta () {
 
   dialogInfo "Caching installer versions …"
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/installer" > $INSTALLER_VER_FILE
-  
+
+  # Check for empty file
+
   if [ ! -s "$INSTALLER_VER_FILE" ] && fileExists $INSTALLER_VER_FILE; then
     dialogMessage "Caching error" "There was a problem updating the installer list! Exiting."
+    exit $FALSE
+  fi
+}
+
+# Cache the filtered Modrinth mod list. $1 is the server version to filter
+# for, $2 (optional) the server/loader type.
+
+cacheModrinth () {
+  serverVersion=$1
+
+  serverType=$2
+  [ -z "$serverType" ] && serverType=$SERVER_TYPE
+
+  category="optimization"
+  maxResults="50"
+
+  mlf="$MOD_LIST_FILE-$serverVersion"
+  
+  dialogInfo "Caching $serverType mods for $serverVersion …"
+
+  #queryString="$MODRINTH_API_URL/search?facets='[['"project_type:mod"'],['"versions:1.21.8"'],['"categories:fabric"'],['"categories:optimization"'],['"server_side:optional","server_side:required"']]&index=follows&limit='50"
+
+  queryString="$MODRINTH_API_URL/search \
+  ?facets= \
+    %5B%5B%22project_type%3Amod%22%5D%2C \
+    %5B%22versions%3A$serverVersion%22%5D%2C \
+    %5B%22categories%3A$serverType%22%5D%2C \
+    %5B%22categories%3A$category%22%5D%2C \
+    %5B%22server_side%3Aoptional%22%2C \
+    %22server_side%3Arequired%22%5D%5D \
+  &index=follows \
+  &limit=$maxResults"
+    
+  download $CURL_OPTIONS_USER_AGENT -X GET $queryString > $MOD_LIST_FILE
+  
+  # Check for empty file
+
+  if [ ! -s "$mlf" ] && fileExists $mlf; then
+    dialogMessage "Caching error" "There was a problem updating the mod list! Exiting."
     exit $FALSE
   fi
 }
@@ -921,6 +973,7 @@ menuInstalledServer () {
   "Manage the $(TSQ $serverVersion $serverType) server installation and the currently attached world $(TSQ $world)." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
+    "m" "Manage mods" \
     "w" "Select world ($(textFormatEmphasis $world))" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
@@ -932,6 +985,8 @@ menuInstalledServer () {
     case $choice in
       s)
         runServer $serverVersion $serverType ;;
+      m)
+        menuMods $serverVersion $serverType ;;
       w)      
         w=$(menuSelectWorld $world $serverVersion $serverType)
         [ "$w" ] && writeConfigKey $serverPropFile "level-name" $w ;;
@@ -950,6 +1005,16 @@ menuInstalledServer () {
     esac
 
   done
+}
+
+# Load (if necessary) and present a list of supported mods for server version
+# $1 and server type $2
+
+menuMods () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+
+  needToCache "$MOD_LIST_FILE-$serverVersion" && cacheModrinth $serverVersion $serverType
 }
 
 # World selector for installed servers. $1 is the name of the currently used
