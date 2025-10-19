@@ -59,6 +59,11 @@
 TRUE="0"
 FALSE="1"
 
+# Whether we are in developer mode
+
+DEV=$TRUE
+[ "$DEV" ] && DEV_SUFFIX="-dev"
+
 # Basic information
 
 APP_NAME="MCServeMe"
@@ -66,11 +71,6 @@ SCRIPT_NAME=$(basename $0)
 APP_DESC="MCJE server launcher for the terminal"
 APP_VER="v0.04"
 MAINTAINER="lortordermur"
-
-# Whether we are in developer mode
-
-DEV=$TRUE
-[ "$DEV" ] && DEV_SUFFIX="-dev"
 
 # Server types; for now only Fabric. When adding server types we would change
 # the “SERVER_*” names to their plurals and use : as a separator.
