@@ -70,7 +70,7 @@ MAINTAINER="lortordermur"
 # Whether we are in developer mode
 
 DEV=$TRUE
-[ $DEV ] && DEV_SUFFIX="-dev"
+[ "$DEV" ] && DEV_SUFFIX="-dev"
 
 # Server types; for now only Fabric. When adding server types we would change
 # the “SERVER_*” names to their plurals and use : as a separator.
@@ -363,19 +363,19 @@ waitForEnter () {
 # Check whether a file exists and is a regular file or symlink
 
 fileExists () {
-  [ -f $* ] || [ -h $* ]
+  [ -f "$1" ] || [ -h "$1" ]
 }
 
 # Check whether a file exists and is a regular file
 
 fileExistsRegular () {
-  [ -f $* ]
+  [ -f "$1" ]
 }
 
 # Check whether a file exists and is r/w
 
 fileAccessible () {
-  [ -r $* ] && [ -w $* ]
+  [ -r "$1" ] && [ -w "$1" ]
 }
 
 # Last modified time of file $1 in epoch seconds
@@ -387,7 +387,7 @@ fileLastModified () {
 # Check if directory $1 is empty
 
 directoryEmpty () {
-  [ -z $(ls -A $1) ]
+  [ -z $(ls -A "$1") ]
 }
 
 # File size in 1024 byte units
@@ -485,13 +485,13 @@ verifyDependency () {
   
   if ! commandExists $cmd; then
 
-    if [ $KICKSTART = $TRUE ]; then
+    if [ "$KICKSTART" = "$TRUE" ]; then
       errorText="Dependency error: Command $(TSQ $cmd) is not available!"
-      [ $pkg ] && errorText="$errorText Try installing the $(TSQ $pkg) package. --Exiting."
+      [ "$pkg" ] && errorText="$errorText Try installing the $(TSQ $pkg) package. --Exiting."
       errorExit "$errorText"
     else
       errorText="Command $(TSQ $(textFormatError $cmd)) is not available!"
-      [ $pkg ] && errorText="$errorText Please install the $(TSQ $(textFormatError $pkg)) package. Exiting."
+      [ "$pkg" ] && errorText="$errorText Please install the $(TSQ $(textFormatError $pkg)) package. Exiting."
       dialogMessage "Required dependency missing" "$errorText"
     fi
 
@@ -573,8 +573,8 @@ isServerVersionNewer () {
     serverCounter=$((serverCounter + 1))
   done
 
-  if [ $lhs ] && [ $rhs ]; then
-    [ $lhs -gt $rhs ] && return $TRUE
+  if [ "$lhs" ] && [ "$rhs" ]; then
+    [ "$lhs" -gt "$rhs" ] && return $TRUE
   fi
   
   return $FALSE
@@ -603,7 +603,7 @@ getLatestStableServerVersion () {
   while [ "$serverCounter" -lt "$NumServerVersions" ]; do
     isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
     
-    if [ $isStable = "true" ]; then
+    if [ "$isStable" = "true" ]; then
       echo $(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
       return $TRUE
     fi
@@ -622,7 +622,7 @@ getLatestStableServerVersion () {
 getLatestInstalledServerVersion () {
   serverType=$1
 
-  [ -z $serverType ] && serverType=$SERVER_TYPE
+  [ -z "$serverType" ] && serverType=$SERVER_TYPE
   ! fileAccessible $GAME_VER_FILE && echo "unknown" &&‌ return $FALSE
   
   serverListJSON=$(cat $GAME_VER_FILE)
@@ -658,7 +658,7 @@ needToCache () {
   if fileExistsRegular $file; then
     timeLastCaching=$(fileLastModified $file)
     timeDiff=$(($timeNow - $timeLastCaching))
-    [ $timeDiff -ge $interval ] && ret=$TRUE
+    [ "$timeDiff" -ge "$interval" ] && ret=$TRUE
   fi
 
   return $ret
@@ -697,7 +697,7 @@ cacheEULA () {
   dialogInfo "Caching Minecraft EULA …"
   download "$CURL_OPTIONS_FOLLOW" "$EULA_URL" | HTMLToText | HTMLEULAFilter > $EULA_FILE
   
-  if [ ! $? ] && fileExists $EULA_FILE; then
+  if [ ! "$?" ] && fileExists $EULA_FILE; then
     dialogMessage "Caching error" "There was a problem updating the EULA file! Please read the text on $EULA_URL before installing a server with this software."
   fi
 }
@@ -712,7 +712,7 @@ cacheEULA () {
 
 buildServerLists () {
   if ! fileExists $GAME_VER_FILE; then
-    if [ ! $KICKSTART = $TRUE ]; then
+    if [ ! "$KICKSTART" = "$TRUE" ]; then
       dialogMessage "Empty list cache" "No version file in the list cache! Try $(textFormatEmphasis "force update list cache") in the main menu."
       return $FALSE
     else # Kickstart cannot continue here because it is non-interactive
@@ -745,7 +745,7 @@ buildServerLists () {
     isStable=$(echo $serverListJSON | jq -r ".[$serverCounter].stable")
     isServerInstalled "$serverVersion" "$serverType" && isInstalled="true" || isInstalled="false"
 
-    if [ $isInstalled = "true" ]; then
+    if [ "$isInstalled" = "true" ]; then
       NumInstalledServerVersions=$((NumInstalledServerVersions + 1))
       ServerVersionListInstalled="$ServerVersionListInstalled$serverVersion "
       installedChar="I"
@@ -755,7 +755,7 @@ buildServerLists () {
       installedChar="a"
     fi
     
-    if [ $isStable = "true" ]; then
+    if [ "$isStable" = "true" ]; then
       NumStableServerVersions=$((NumStableServerVersions + 1))
       ServerVersionListStable="$ServerVersionListStable$serverVersion "
       stableChar="S"
@@ -856,7 +856,7 @@ menuServerList () {
     installed)
       menuList=$ServerVersionListInstalled
       howMany=$NumInstalledServerVersions
-      if [ $howMany = "0" ]; then
+      if [ "$howMany" = "0" ]; then
         dialogMessage "No servers" "You do not have any servers installed! Please pick one from the $(TSQ "stable") or $(TSQ "all") list."
         return $FALSE
       fi ;;
@@ -949,8 +949,8 @@ menuSelectWorld () {
   worldCounter="0"
   
   for world in $worlds; do
-    if [ -d $OptionWorldDir/$world ]; then
-      [ $world = $worldName ] && worldChar="U" || worldChar=" "
+    if [ -d "$OptionWorldDir/$world" ]; then
+      [ "$world" = "$worldName" ] && worldChar="U" || worldChar=" "
       worldList="$worldList$world $worldChar "
       worldCounter=$((worldCounter + 1))
     fi
@@ -958,7 +958,7 @@ menuSelectWorld () {
 
   while true; do
 
-  [ ! $worldCounter ] && dialogMessage "Error" "No worlds found in $(textFormatEmphasis $OptionWorldDir)!" && return $FALSE
+  [ ! "$worldCounter" ] && dialogMessage "Error" "No worlds found in $(textFormatEmphasis $OptionWorldDir)!" && return $FALSE
 
   choice=$(
     dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "World selection" --menu \
@@ -1110,11 +1110,11 @@ optionUIJarFolder () {
     
     dir=$(dialogInput "Server jar directory" "Root directory for the server jars:" $OptionJarDir)
 
-    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+    if [ "$dir" ] && [ -d "$dir" ]; then # Directory does exist
       OptionJarDir=$dir
       saveConfig
       break
-    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+    elif [ "$dir" ] && [ ! -d "$dir" ]; then # Directory does not exist
 
       if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
 
@@ -1142,11 +1142,11 @@ optionUIWorldFolder () {
     
     dir=$(dialogInput "World directory" "Root directory for the worlds:" $OptionWorldDir)
 
-    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+    if [ "$dir" ] && [ -d "$dir" ]; then # Directory does exist
       OptionWorldDir=$dir
       saveConfig
       break
-    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+    elif [ "$dir" ] && [ ! -d "$dir" ]; then # Directory does not exist
 
       if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
 
@@ -1174,11 +1174,11 @@ optionUIBackupFolder () {
     
     dir=$(dialogInput "Backup directory" "Root directory for backups:" $OptionBackupDir)
 
-    if [ "$dir" ] && [ -d $dir ]; then # Directory does exist
+    if [ "$dir" ] && [ -d "$dir" ]; then # Directory does exist
       OptionBackupDir=$dir
       saveConfig
       break
-    elif [ "$dir" ] && [ ! -d $dir ]; then # Directory does not exist
+    elif [ "$dir" ] && [ ! -d "$dir" ]; then # Directory does not exist
 
       if dialogYesNo "Invalid path" "The directory $(textFormatEmphasis $dir) does not exist, create it?"; then
 
@@ -1287,11 +1287,11 @@ optionUIAgreeToEULA () {
 
 installScript () {
   # Check if we are running an installed version
-  [ $SCRIPT_DIR = $BIN_DIR ] && dialogMessage "Path error" "The $APP_NAME script is already installed. Please uninstall it first." && return $FALSE
+  [ "$SCRIPT_DIR" = "$BIN_DIR" ] && dialogMessage "Path error" "The $APP_NAME script is already installed. Please uninstall it first." && return $FALSE
   
   dialogYesNo "$APP_NAME installation" "Install the $(textFormatEmphasis $SCRIPT_NAME) script to $(textFormatEmphasis $BIN_DIR)?" || return
   
-  if [ ! $(echo $PATH | grep $BIN_DIR) ]; then
+  if [ ! $(echo "$PATH" | grep "$BIN_DIR") ]; then
     dialogYesNo "Path error" "$(textFormatEmphasis $BIN_DIR) is not in your PATH variable! Install anyway?" || return $FALSE
   fi
 
@@ -1311,8 +1311,8 @@ installScript () {
   # Check for the desktop assets under the script directory and the current directory
 
   desktopAssetsDir="$SCRIPT_DIR/desktop"
-  [ ! -d $desktopAssetsDir ] && desktopAssetsDir="$(pwd)/desktop"
-  [ ! -d $desktopAssetsDir ] && return
+  [ ! -d "$desktopAssetsDir" ] && desktopAssetsDir="$(pwd)/desktop"
+  [ ! -d "$desktopAssetsDir" ] && return
   
   if fileExistsRegular "$desktopAssetsDir/com.$MAINTAINER.$APP_NAME.desktop" &&
      fileExistsRegular "$desktopAssetsDir/$SCRIPT_NAME.svg" &&
@@ -1463,7 +1463,7 @@ writeConfigKey () {
     mv -f $TMP_FILE $file # Update the file with the changes
   
   else # File not accessible or nonexistent
-    if [ $KICKSTART = $TRUE ]; then
+    if [ "$KICKSTART" = "$TRUE" ]; then
       errorExit "ERROR: No write access to configuration file!"
     else
       dialogMessage "Filesystem error" "Cannot access the configuration file! Check directory permissions for $(dirname $file)."
@@ -1482,7 +1482,7 @@ optimizeWorld () {
   serverType=$3
   [ "$3" ] && serverType="$3" || serverType=$SERVER_TYPE
 
-  [ -z $world ] && dialogMessage "Error" "World folder of $(TSQ $(textFormatEmphasis $world))’not found!"
+  [ -z "$world" ] && dialogMessage "Error" "World folder of $(TSQ $(textFormatEmphasis $world))’not found!"
   
   dialogYesNo "Optimize $world" "Upgrade to the newest world format? This will force recalculation of world data on the next server invocation, and the world may become $(textFormatError "incompatible") with older server versions." || return
 
@@ -1677,7 +1677,7 @@ downloadServer () {
 
   loaderJSON=$(cat $matchFile)
   if [ ! "$loaderJSON" ]; then
-    [ $KICKSTART = $FALSE ] && dialogMessage "Transmission error" "The loader match data could not be obtained."
+    [ "$KICKSTART" = "$FALSE" ] && dialogMessage "Transmission error" "The loader match data could not be obtained."
     return $FALSE
   fi
 
@@ -1691,7 +1691,7 @@ downloadServer () {
 
   stableLoader=; l="0"
   
-  while [ $l -lt $numLoaderVersions ]; do
+  while [ "$l" -lt "$numLoaderVersions" ]; do
   
     stableLoader=$(echo $loaderJSON | jq -r ".[$l].loader.version")
     isStable=$(echo $loaderJSON | jq -r ".[$l].loader.stable")
@@ -1708,7 +1708,7 @@ downloadServer () {
   else
     dialogInfo "Finding the best loader for $serverVersion ($serverType) … several matches."
 
-    if [ $KICKSTART = $FALSE ]; then
+    if [ "$KICKSTART" = "$FALSE" ]; then
       dialogYesNo "Several loader matches" "Would you like to install the newer $(textFormatEmphasis "unstable") loader version $(textFormatEmphasis "$anyLoader") rather than the stable $(textFormatEmphasis "$stableLoader")? This is rather not recommended if you are running a stable server version." && loader=$anyLoader || loader=$stableLoader
     else
       loader=$stableLoader # Prefer stable versions in kickstart
@@ -1764,12 +1764,12 @@ initServer () {
   echoBold "#######################################"
   echoBold
 
-  [ $KICKSTART = $FALSE ] && waitForEnter "continue"
+  [ "$KICKSTART" = "$FALSE" ] && waitForEnter "continue"
   resetTerminal
 
   # FIXME: Server initially shows as not installed in the server list
 
-  [ $KICKSTART = $FALSE ] && buildServerLists $serverType
+  [ "$KICKSTART" = "$FALSE" ] && buildServerLists $serverType
 }
 
 # Run the server of version $1 and (optionally) type $2
@@ -1786,7 +1786,7 @@ runServer () {
   echo $CONFIG_HEADER > eula.txt
   writeConfigKey eula.txt "eula" "$OptionAgreedToEULA"
   
-  if [ $KICKSTART = $TRUE ]; then
+  if [ "$KICKSTART" = "$TRUE" ]; then
     dialogInfo "Launching $(TSQ $(textFormatEmphasis $serverVersion \($serverType\)))’. Type $(TSQ $(textFormatEmphasis "/stop")) in the console to shut down the server."
     sleep $LONG_DELAY
   else
@@ -1812,7 +1812,7 @@ runServer () {
   echoBold "#################################"
   echoBold
   
-  [ $KICKSTART = $FALSE ] && waitForEnter "return to the launcher"
+  [ "$KICKSTART" = "$FALSE" ] && waitForEnter "return to the launcher"
   resetTerminal
 
   cd $SCRIPT_DIR
@@ -1931,13 +1931,13 @@ init () {
 
   onlineWarning "It seems there is no internet connection. Some functionality will be limited."
   
-  [ $AUTO_CACHE = $TRUE ] && online && needToCache $GAME_VER_FILE $LIST_CACHE_INTERVAL && cacheFabricMeta
+  [ "$AUTO_CACHE" = "$TRUE" ] && online && needToCache $GAME_VER_FILE $LIST_CACHE_INTERVAL && cacheFabricMeta
   
-  [ $KICKSTART = $FALSE ] && buildServerLists
+  [ "$KICKSTART" = "$FALSE" ] && buildServerLists
   
   #online && needToCache $EULA_FILE $EULA_CACHE_INTERVAL && cacheEULA # The EULA should always be cached
 
-  if [ $KICKSTART = $TRUE ]; then
+  if [ "$KICKSTART" = "$TRUE" ]; then
     dialogInfo "$(textFormatError "Kickstart mode"): Launching the newest server; no frills attached, no questions posed."
     sleep $LONG_DELAY
     kickStart
@@ -1951,8 +1951,8 @@ kickStart () {
   serverType=$1
   
   lssv=$(getLatestStableServerVersion $serverType)
-  [ -z $lssv ] && lssv=$(getLatestInstalledServerVersion $serverType)
-  [ -z $lssv ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
+  [ -z "$lssv" ] && lssv=$(getLatestInstalledServerVersion $serverType)
+  [ -z "$lssv" ] && errorExit "KICKSTART: Could not determine the latest server version! Check your internet connection."
 
   ! isServerInstalled $lssv && downloadServer $lssv $serverType
   runServer $lssv $serverType
@@ -1990,7 +1990,7 @@ fileExists $DIALOGRC || echo $UI_COLORS > $DIALOGRC
 
 # Root check
 
-if [ $(id -u) = 0 ]; then
+if [ $(id -u) = "0" ]; then
   dialogMessage "Root detected" "Running a game server as root $(textFormatError "is a bad idea"). Exiting."
   exit $FALSE
 fi
