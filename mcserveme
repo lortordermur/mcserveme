@@ -1016,6 +1016,8 @@ menuMods () {
 
   modCounter="0";
 
+  modList="< Previous page "
+  
   while [ $modCounter -lt $modsPerPage ]; do
     modID=$(echo $modJSON | jq -r ".hits[$modCounter].project_id")
     modTitle=$(echo $modJSON | jq -r ".hits[$modCounter].title" | spaceToNBSP)
@@ -1028,12 +1030,31 @@ menuMods () {
     modCounter=$((modCounter + 1))
   done
 
-  choice=$(
-    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server mods" --menu \
-    "$numMods server mod(s) found." \
-    $MAIN_MENU_SIZE \
-    $modList
-    )
+  modList="$modList> Next page "
+
+  while true; do
+
+    choice=$(
+      dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server mods" --menu \
+      "$numMods server mod(s) found." \
+      $MAIN_MENU_SIZE \
+      $modList
+      )
+      
+      if [ "$choice" ]; then
+        case $choice in
+          <)
+            break ;;
+          >)
+            break ;;
+          *)
+            break ;;
+        esac
+      else
+        break
+      fi
+
+    done
 }
 
 # World selector for installed servers. $1 is the name of the currently used
