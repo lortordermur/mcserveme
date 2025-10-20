@@ -700,6 +700,7 @@ cacheFabricMeta () {
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/game" > $GAME_VER_FILE
   
   if [ ! -s "$GAME_VER_FILE" ] && fileExists $GAME_VER_FILE; then
+    rm -f $GAME_VER_FILE
     dialogMessage "Caching error" "There was a problem updating the game version list! Exiting."
     exit $FALSE
   fi
@@ -708,6 +709,7 @@ cacheFabricMeta () {
   download "$CURL_OPTIONS_USER_AGENT" "$FABRIC_API_URL/versions/loader" > $LOADER_VER_FILE
 
   if [ ! -s "$LOADER_VER_FILE" ] && fileExists $LOADER_VER_FILE; then
+    rm -f $LOADER_VER_FILE
     dialogMessage "Caching error" "There was a problem updating the loader list! Exiting."
     exit $FALSE
   fi
@@ -718,6 +720,7 @@ cacheFabricMeta () {
   # Check for empty file
 
   if [ ! -s "$INSTALLER_VER_FILE" ] && fileExists $INSTALLER_VER_FILE; then
+    rm -f $INSTALLER_VER_FILE
     dialogMessage "Caching error" "There was a problem updating the installer list! Exiting."
     exit $FALSE
   fi
@@ -733,30 +736,38 @@ cacheModrinth () {
   [ -z "$serverType" ] && serverType=$SERVER_TYPE
 
   category="optimization"
-  maxResults="50"
+  offset="0"
+  maxResults="10"
 
   mlf="$MOD_LIST_FILE-$serverVersion"
   
   dialogInfo "Caching $serverType mods for $serverVersion …"
 
-  #queryString="$MODRINTH_API_URL/search?facets='[['"project_type:mod"'],['"versions:1.21.8"'],['"categories:fabric"'],['"categories:optimization"'],['"server_side:optional","server_side:required"']]&index=follows&limit='50"
+  # Test query for reqbin
+  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&limit=10
+  
+  # URL encoded query mask
 
-  queryString="$MODRINTH_API_URL/search \
-  ?facets= \
-    %5B%5B%22project_type%3Amod%22%5D%2C \
-    %5B%22versions%3A$serverVersion%22%5D%2C \
-    %5B%22categories%3A$serverType%22%5D%2C \
-    %5B%22categories%3A$category%22%5D%2C \
-    %5B%22server_side%3Aoptional%22%2C \
-    %22server_side%3Arequired%22%5D%5D \
-  &index=follows \
+  queryString="$MODRINTH_API_URL/search\
+  ?facets=\
+  %5B%5B%22project_type%3Amod%22%5D%2C\
+  %5B%22versions%3A$serverVersion%22%5D%2C\
+  %5B%22categories%3A$serverType%22%5D%2C\
+  %5B%22categories%3A$category%22%5D%2C\
+  %5B%22server_side%3Arequired%22%2C\
+  %22server_side%3Aoptional%22%5D%2C\
+  %5B%22client_side%3Aoptional%22%2C\
+  %22client_side%3Aunsupported%22%5D%5D\
+  &index=follows\
+  &offset=$offset\
   &limit=$maxResults"
     
-  download $CURL_OPTIONS_USER_AGENT -X GET $queryString > $MOD_LIST_FILE
+  download $CURL_OPTIONS_USER_AGENT -X GET $queryString | jq . > $mlf
   
   # Check for empty file
 
   if [ ! -s "$mlf" ] && fileExists $mlf; then
+    rm -f $mlf
     dialogMessage "Caching error" "There was a problem updating the mod list! Exiting."
     exit $FALSE
   fi
@@ -767,6 +778,7 @@ cacheEULA () {
   download "$CURL_OPTIONS_FOLLOW" "$EULA_URL" | HTMLToText | HTMLEULAFilter > $EULA_FILE
   
   if [ ! "$?" ] && fileExists $EULA_FILE; then
+    rm -f $EULA_FILE
     dialogMessage "Caching error" "There was a problem updating the EULA file! Please read the text on $EULA_URL before installing a server with this software."
   fi
 }
