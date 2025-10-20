@@ -137,8 +137,6 @@ GAME_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-gameversions"
 LOADER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-loaderversions"
 INSTALLER_VER_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-installerversions"
 
-MOD_LIST_FILE="$LIST_CACHE_DIR/$SERVER_TYPE-modlist"
-
 # The three server version list “arrays”
 
 ServerVersionList=
@@ -356,7 +354,7 @@ getDesktop () {
   echo $desktop
 }
 
-# As the name says. $1 signifies what Enter will do
+# As the name says. $1 (optional) signifies what Enter will do
 
 waitForEnter () {
   what="continue"
@@ -726,53 +724,6 @@ cacheFabricMeta () {
   fi
 }
 
-# Cache the filtered Modrinth mod list. $1 is the server version to filter
-# for, $2 (optional) the server/loader type.
-
-cacheModrinth () {
-  serverVersion=$1
-
-  serverType=$2
-  [ -z "$serverType" ] && serverType=$SERVER_TYPE
-
-  category="optimization"
-  offset="0"
-  maxResults="10"
-
-  mlf="$MOD_LIST_FILE-$serverVersion"
-  
-  dialogInfo "Caching $serverType mods for $serverVersion …"
-
-  # Test query for reqbin
-  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
-  
-  # URL encoded query mask
-
-  queryString="$MODRINTH_API_URL/search\
-?facets=\
-%5B%5B%22project_type%3Amod%22%5D%2C\
-%5B%22versions%3A$serverVersion%22%5D%2C\
-%5B%22categories%3A$serverType%22%5D%2C\
-%5B%22categories%3A$category%22%5D%2C\
-%5B%22server_side%3Arequired%22%2C\
-%22server_side%3Aoptional%22%5D%2C\
-%5B%22client_side%3Aoptional%22%2C\
-%22client_side%3Aunsupported%22%5D%5D\
-&index=follows\
-&offset=$offset\
-&limit=$maxResults"
-    
-  download $CURL_OPTIONS_USER_AGENT -X GET $queryString | jq . > $mlf
-  
-  # Check for empty file
-
-  if [ ! -s "$mlf" ] && fileExists $mlf; then
-    rm -f $mlf
-    dialogMessage "Caching error" "There was a problem updating the mod list! Exiting."
-    exit $FALSE
-  fi
-}
-
 cacheEULA () {
   dialogInfo "Caching Minecraft EULA …"
   download "$CURL_OPTIONS_FOLLOW" "$EULA_URL" | HTMLToText | HTMLEULAFilter > $EULA_FILE
@@ -1026,7 +977,63 @@ menuMods () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
-  needToCache "$MOD_LIST_FILE-$serverVersion" && cacheModrinth $serverVersion $serverType
+  listOffset="0"
+  modsPerPage="10"
+  modCategory="optimization"
+
+  dialogInfo "Caching $serverType mods for $serverVersion …"
+
+  # Test query for reqbin
+  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
+  
+  # URL encoded query mask
+
+  queryString="$MODRINTH_API_URL/search\
+?facets=\
+%5B%5B%22project_type%3Amod%22%5D%2C\
+%5B%22versions%3A$serverVersion%22%5D%2C\
+%5B%22categories%3A$serverType%22%5D%2C\
+%5B%22categories%3A$modCategory%22%5D%2C\
+%5B%22server_side%3Arequired%22%2C\
+%22server_side%3Aoptional%22%5D%2C\
+%5B%22client_side%3Aoptional%22%2C\
+%22client_side%3Aunsupported%22%5D%5D\
+&index=follows\
+&offset=$listOffset\
+&limit=$modsPerPage"
+    
+  modJSON=$(download $CURL_OPTIONS_USER_AGENT -X GET $queryString)
+  numMods=$(echo $modJSON | jq -r ".total_hits")
+  modlist=""
+
+  error=$(echo $modJSON | jq -r ".error")
+  
+  [ "$error" != "null" ] && dialogMessage "Mod caching error" "The mod server returned an error!\n\n$(textFormatError $error)" && return $FALSE
+
+  [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError Version: $serverVersion, category: $serverType, category: $modCategory)" && return $FALSE
+
+  # Craft the mod list
+
+  modCounter="0";
+
+  while [ $modCounter -lt $modsPerPage ]; do
+    modID=$(echo $modJSON | jq -r ".hits[$modCounter].project_id")
+    modTitle=$(echo $modJSON | jq -r ".hits[$modCounter].title" | spaceToNBSP)
+    modDescription=$(echo $modJSON | jq -r ".hits[$modCounter].description" | spaceToNBSP)
+
+    [ "$modTitle" = "null" ] && break;
+
+    modList="$modList$modID $modTitle "
+    
+    modCounter=$((modCounter + 1))
+  done
+
+  choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server mods" --menu \
+    "$numMods server mod(s) found." \
+    $MAIN_MENU_SIZE \
+    $modList
+    )
 }
 
 # World selector for installed servers. $1 is the name of the currently used
