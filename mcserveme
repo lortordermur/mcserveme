@@ -744,23 +744,23 @@ cacheModrinth () {
   dialogInfo "Caching $serverType mods for $serverVersion …"
 
   # Test query for reqbin
-  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&limit=10
+  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
   
   # URL encoded query mask
 
   queryString="$MODRINTH_API_URL/search\
-  ?facets=\
-  %5B%5B%22project_type%3Amod%22%5D%2C\
-  %5B%22versions%3A$serverVersion%22%5D%2C\
-  %5B%22categories%3A$serverType%22%5D%2C\
-  %5B%22categories%3A$category%22%5D%2C\
-  %5B%22server_side%3Arequired%22%2C\
-  %22server_side%3Aoptional%22%5D%2C\
-  %5B%22client_side%3Aoptional%22%2C\
-  %22client_side%3Aunsupported%22%5D%5D\
-  &index=follows\
-  &offset=$offset\
-  &limit=$maxResults"
+?facets=\
+%5B%5B%22project_type%3Amod%22%5D%2C\
+%5B%22versions%3A$serverVersion%22%5D%2C\
+%5B%22categories%3A$serverType%22%5D%2C\
+%5B%22categories%3A$category%22%5D%2C\
+%5B%22server_side%3Arequired%22%2C\
+%22server_side%3Aoptional%22%5D%2C\
+%5B%22client_side%3Aoptional%22%2C\
+%22client_side%3Aunsupported%22%5D%5D\
+&index=follows\
+&offset=$offset\
+&limit=$maxResults"
     
   download $CURL_OPTIONS_USER_AGENT -X GET $queryString | jq . > $mlf
   
