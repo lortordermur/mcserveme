@@ -1042,18 +1042,20 @@ menuAvailableMods () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
-  listOffset="0"
-  modsPerPage="10"
   modCategory="optimization"
+  modsPerPage="10"
+  listOffset="0"
 
-  dialogInfo "Caching $serverType mods for $serverVersion …"
+  while true; do
 
-  # Test query for reqbin
-  #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
+    dialogInfo "Caching $serverType mod(s) for $serverVersion …"
 
-  # URL encoded query mask
+    # Test query for reqbin
+    #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
 
-  queryString="$MODRINTH_API_URL/search\
+    # URL encoded query mask
+
+    queryString="$MODRINTH_API_URL/search\
 ?facets=\
 %5B%5B%22project_type%3Amod%22%5D%2C\
 %5B%22versions%3A$serverVersion%22%5D%2C\
@@ -1067,41 +1069,39 @@ menuAvailableMods () {
 &offset=$listOffset\
 &limit=$modsPerPage"
 
-  modJSON=$(download $CURL_OPTIONS_USER_AGENT -X GET $queryString)
-  numMods=$(echo $modJSON | jq -r ".total_hits")
-  modlist=""
+    modJSON=$(download $CURL_OPTIONS_USER_AGENT -X GET $queryString)
+    numMods=$(echo $modJSON | jq -r ".total_hits")
 
-  error=$(echo $modJSON | jq -r ".error")
+    error=$(echo $modJSON | jq -r ".error")
 
-  [ "$error" != "null" ] && dialogMessage "Mod caching error" "The mod server returned an error!\n\n$(textFormatError $error)" && return $FALSE
+    [ "$error" != "null" ] && dialogMessage "Mod caching error" "The mod server returned an error!\n\n$(textFormatError $error)" && return $FALSE
 
-  [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError "Version: $serverVersion, category: $serverType, category: $modCategory")" && return $FALSE
+    [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError "Version: $serverVersion, category: $serverType, category: $modCategory")" && return $FALSE
 
-  # Craft the mod list
+    # Craft the mod list
 
-  modCounter="0";
+    modList=
+    modCounter="0";
 
-  [ "$listOffset" -gt "0" ] && modList="< Previous page "
-  
-  while [ $modCounter -lt $modsPerPage ]; do
-    modID=$(echo $modJSON | jq -r ".hits[$modCounter].project_id")
-    modTitle=$(echo $modJSON | jq -r ".hits[$modCounter].title" | spaceToNBSP)
-    modDescription=$(echo $modJSON | jq -r ".hits[$modCounter].description" | spaceToNBSP)
-
-    [ "$modTitle" = "null" ] && break;
-
-    modList="$modList$modID $modTitle "
+    [ "$listOffset" -gt "0" ] && modList="$modList< Previous page "
     
-    modCounter=$(($modCounter + 1))
-  done
+    while [ $modCounter -lt $modsPerPage ]; do
+      modID=$(echo $modJSON | jq -r ".hits[$modCounter].project_id")
+      modTitle=$(echo $modJSON | jq -r ".hits[$modCounter].title" | spaceToNBSP)
+      modDescription=$(echo $modJSON | jq -r ".hits[$modCounter].description" | spaceToNBSP)
 
-  [ "$listOffset" -lt "$numMods" ] && modList="$modList> Next page "
+      [ "$modTitle" = "null" ] && break;
 
-  while true; do
+      modList="$modList$modID $modTitle "
+      
+      modCounter=$(($modCounter + 1))
+    done
+
+    [ "$listOffset" -lt "$(($numMods - ($modCounter + 1)))" ] && modList="$modList> Next page "
 
     choice=$(
       dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Server mods" --menu \
-      "$numMods server mod(s) found." \
+      "Showing $(($listOffset + 1))-$(($listOffset + $modCounter)) of $numMods $serverType server $modCategory mod(s)." \
       $MAIN_MENU_SIZE \
       $modList
       )
