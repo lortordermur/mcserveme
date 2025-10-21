@@ -1050,7 +1050,7 @@ menuAvailableMods () {
 
   # Test query for reqbin
   #https://api.modrinth.com/v2/search?facets=[["project_type:mod"],["versions:1.21.8"],["categories:fabric"],["categories:optimization"],["server_side:required","server_side:optional"],["client_side:optional","client_side:unsupported"]]&index=follows&offset=10&limit=10
-  
+
   # URL encoded query mask
 
   queryString="$MODRINTH_API_URL/search\
@@ -1066,13 +1066,13 @@ menuAvailableMods () {
 &index=follows\
 &offset=$listOffset\
 &limit=$modsPerPage"
-    
+
   modJSON=$(download $CURL_OPTIONS_USER_AGENT -X GET $queryString)
   numMods=$(echo $modJSON | jq -r ".total_hits")
   modlist=""
 
   error=$(echo $modJSON | jq -r ".error")
-  
+
   [ "$error" != "null" ] && dialogMessage "Mod caching error" "The mod server returned an error!\n\n$(textFormatError $error)" && return $FALSE
 
   [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError "Version: $serverVersion, category: $serverType, category: $modCategory")" && return $FALSE
@@ -1108,12 +1108,12 @@ menuAvailableMods () {
       
       if [ "$choice" ]; then
         case $choice in
-          <)
+          \<)
             [ "$listOffset" -ge "$modsPerPage" ] && listOffset=$(($listOffset - $modsPerPage)) ;;
-          >)
+          \>)
             [ "$listOffset" -lt "$numMods" ] && listOffset=$(($listOffset + $modsPerPage)) ;;
-          *)
-            break ;;
+          ????????)
+            dialogMessage "Mod ID" "$choice" ;;
         esac
       else
         break
