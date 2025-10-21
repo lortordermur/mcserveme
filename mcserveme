@@ -591,7 +591,7 @@ isServerVersionNewer () {
     server=$1 && lhs=$serverCounter
     server=$2 && rhs=$serverCounter
 
-    serverCounter=$((serverCounter + 1))
+    serverCounter=$(($serverCounter + 1))
   done
 
   if [ "$lhs" ] && [ "$rhs" ]; then
@@ -629,7 +629,7 @@ getLatestStableServerVersion () {
       return $TRUE
     fi
 
-    serverCounter=$((serverCounter + 1))
+    serverCounter=$(($serverCounter + 1))
     
   done
   
@@ -655,7 +655,7 @@ getLatestInstalledServerVersion () {
     version=$(echo $serverListJSON | jq -r ".[$serverCounter].version" | spaceToNBSP)
     isServerInstalled $version $serverType && echo $version && return $TRUE
 
-    serverCounter=$((serverCounter + 1))
+    serverCounter=$(($serverCounter + 1))
   done
 
   echo "unknown"
@@ -778,7 +778,7 @@ buildServerLists () {
     isServerInstalled "$serverVersion" "$serverType" && isInstalled="true" || isInstalled="false"
 
     if [ "$isInstalled" = "true" ]; then
-      NumInstalledServerVersions=$((NumInstalledServerVersions + 1))
+      NumInstalledServerVersions=$(($NumInstalledServerVersions + 1))
       ServerVersionListInstalled="$ServerVersionListInstalled$serverVersion "
       installedChar="I"
       $isStable && stableChar="S" || stableChar="u"
@@ -788,7 +788,7 @@ buildServerLists () {
     fi
     
     if [ "$isStable" = "true" ]; then
-      NumStableServerVersions=$((NumStableServerVersions + 1))
+      NumStableServerVersions=$(($NumStableServerVersions + 1))
       ServerVersionListStable="$ServerVersionListStable$serverVersion "
       stableChar="S"
       ServerVersionListStable="$ServerVersionListStable$installedChar$stableChar "
@@ -797,8 +797,14 @@ buildServerLists () {
     fi
 
     ServerVersionList="$ServerVersionList$installedChar$stableChar "
-    serverCounter=$((serverCounter + 1))
+    serverCounter=$(($serverCounter + 1))
   done
+}
+
+# Returns whether the mod with the ID $1 is installed on server $2 of type $3.
+
+isModInstalled () {
+  return;
 }
 
 # Convert HTML to plain text using sed. From left to right: Remove tags,
@@ -920,7 +926,8 @@ menuServerList () {
   done
 }
 
-# Menu for installed servers
+# Menu for installed servers. $1 is the server version, $2 (optional) the
+# server type.
 
 menuInstalledServer () {
   serverVersion=$1
@@ -936,8 +943,8 @@ menuInstalledServer () {
   "Manage the $(TSQ $serverVersion $serverType) server installation and the currently attached world $(TSQ $world)." \
   $MAIN_MENU_SIZE \
     "s" "Start server" \
-    "m" "Manage mods" \
     "w" "Select world ($(textFormatEmphasis $world))" \
+    "m" "Manage mods" \
     "p" "Edit $(textFormatEmphasis "server.properties")" \
     "b" "Backup" \
     "o" "$(textFormatError "Optimize world")" \
@@ -949,7 +956,7 @@ menuInstalledServer () {
       s)
         runServer $serverVersion $serverType ;;
       m)
-        menuMods $serverVersion $serverType ;;
+        menuAvailableMods $serverVersion $serverType ;;
       w)      
         w=$(menuSelectWorld $world $serverVersion $serverType)
         [ "$w" ] && writeConfigKey $serverPropFile "level-name" $w ;;
@@ -970,10 +977,68 @@ menuInstalledServer () {
   done
 }
 
-# Load (if necessary) and present a list of supported mods for server version
-# $1 and server type $2
+# Menu for servers that are not installed
 
-menuMods () {
+menuAvailableServer () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+  
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server" --menu \
+  "Options for downloadable servers." \
+  $MAIN_MENU_SIZE \
+    "i" "Download and install $serverVersion ($serverType)"
+    )
+
+    case $choice in
+      i)
+        downloadServer "$1" "$2" && break ;;
+      *)
+        break ;;
+    esac
+  done
+}
+
+# The front-end menu to the mod menus
+
+menuModManagement () {
+  serverVersion=$1
+  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
+  
+  while true; do
+    choice=$(
+    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Mod manager for $1 ($2)" --menu \
+  "What do you want to do?" \
+  $MAIN_MENU_SIZE \
+    "m" "Manage installed mods"
+    "b" "Browse available mods"
+    "u" "Update all installed mods"
+    )
+
+    case $choice in
+      m)
+        break ;;
+      b)
+        menuAvailableMods "$1" "$2" && break ;;
+      u)
+        break ;;
+      *)
+        break ;;
+    esac
+  done
+}
+
+# Show a menu of installed mods for server version $1 and server type $2
+
+menuInstalledMods () {
+  return;
+}
+
+# Load and present a list of supported mods for server version $1 and server
+# type $2
+
+menuAvailableMods () {
   serverVersion=$1
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
@@ -1010,13 +1075,13 @@ menuMods () {
   
   [ "$error" != "null" ] && dialogMessage "Mod caching error" "The mod server returned an error!\n\n$(textFormatError $error)" && return $FALSE
 
-  [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError Version: $serverVersion, category: $serverType, category: $modCategory)" && return $FALSE
+  [ "$numMods" -eq "0" ] && dialogMessage "Mod search error" "No mods matching the criteria were found:\n\n$(textFormatError "Version: $serverVersion, category: $serverType, category: $modCategory")" && return $FALSE
 
   # Craft the mod list
 
   modCounter="0";
 
-  modList="< Previous page "
+  [ "$listOffset" -gt "0" ] && modList="< Previous page "
   
   while [ $modCounter -lt $modsPerPage ]; do
     modID=$(echo $modJSON | jq -r ".hits[$modCounter].project_id")
@@ -1027,10 +1092,10 @@ menuMods () {
 
     modList="$modList$modID $modTitle "
     
-    modCounter=$((modCounter + 1))
+    modCounter=$(($modCounter + 1))
   done
 
-  modList="$modList> Next page "
+  [ "$listOffset" -lt "$numMods" ] && modList="$modList> Next page "
 
   while true; do
 
@@ -1044,9 +1109,9 @@ menuMods () {
       if [ "$choice" ]; then
         case $choice in
           <)
-            break ;;
+            [ "$listOffset" -ge "$modsPerPage" ] && listOffset=$(($listOffset - $modsPerPage)) ;;
           >)
-            break ;;
+            [ "$listOffset" -lt "$numMods" ] && listOffset=$(($listOffset + $modsPerPage)) ;;
           *)
             break ;;
         esac
@@ -1055,6 +1120,12 @@ menuMods () {
       fi
 
     done
+}
+
+# Show details about the mod with ID $1 relating to the server $2 of type $3.
+
+menuModDetails () {
+  return
 }
 
 # World selector for installed servers. $1 is the name of the currently used
@@ -1074,7 +1145,7 @@ menuSelectWorld () {
     if [ -d "$OptionWorldDir/$world" ]; then
       [ "$world" = "$worldName" ] && worldChar="U" || worldChar=" "
       worldList="$worldList$world $worldChar "
-      worldCounter=$((worldCounter + 1))
+      worldCounter=$(($worldCounter + 1))
     fi
   done
 
@@ -1096,29 +1167,6 @@ menuSelectWorld () {
       return $TRUE
     fi
     
-  done
-}
-
-# Menu for servers that are not installed
-
-menuAvailableServer () {
-  serverVersion=$1
-  [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
-  
-  while true; do
-    choice=$(
-    dialog $DIALOG_COMMON --cancel-label "Back" --default-button "ok" --title "Available server" --menu \
-  "Options for downloadable servers." \
-  $MAIN_MENU_SIZE \
-    "i" "Download and install $serverVersion ($serverType)"
-    )
-
-    case $choice in
-      i)
-        downloadServer "$1" "$2" && break ;;
-      *)
-        break ;;
-    esac
   done
 }
 
