@@ -1043,6 +1043,7 @@ menuAvailableMods () {
   [ "$2" ] && serverType="$2" || serverType=$SERVER_TYPE
 
   modCategory="optimization"
+  modSorting="follows"
   modsPerPage="25"
   listOffset="0"
 
@@ -1069,7 +1070,7 @@ menuAvailableMods () {
 %22server_side%3Aoptional%22%5D%2C\
 %5B%22client_side%3Aoptional%22%2C\
 %22client_side%3Aunsupported%22%5D%5D\
-&index=follows\
+&index=$modSorting\
 &offset=$listOffset\
 &limit=$modsPerPage"
 
