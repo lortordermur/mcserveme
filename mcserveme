@@ -461,12 +461,16 @@ TDQ () {
 # Shorten the string $1 to max. $2 characters, including a trailing ellipsis
 
 abbreviateString () {
-  abbrevLength=$2
-  [ -z "$2" ] && abbrevLength=$DEFAULT_ABBREV_LENGTH
+  maxLength=$2
+  [ -z "$maxLength" ] && maxLength=$DEFAULT_ABBREV_LENGTH
+
+  longString=$1
+  longStringLength=$(echo $longString | wc -m)
   
-  abbrevString=$(printf "%.*s" "$abbrevLength" "$1")
+  abbrevString=$(printf "%.*s" $maxLength $longString)
   abbrevStringLength=$(echo $abbrevString | wc -m)
-  [ "$abbrevStringLength" -lt "$2" ] || abbrevString="$abbrevString…"
+
+  [ "$abbrevStringLength" -lt "$longStringLength" ] && abbrevString="$abbrevString…"
   
   echo $abbrevString
 }
@@ -1086,6 +1090,7 @@ menuAvailableMods () {
       # Craft the mod list
 
       modList=
+      #modListWidth="78"
       modCounter="0";
 
       [ "$listOffset" -gt "0" ] && modList="$modList< Previous page "
@@ -1097,7 +1102,8 @@ menuAvailableMods () {
 
         [ "$modTitle" = "null" ] && break;
 
-        modList="$modList$modID $modTitle "
+        modList="$modList$modID $(textFormatEmphasis $modTitle)– $modDescription "
+        #modList="$modList$modID $(abbreviateString "$(textFormatEmphasis $modTitle)– $modDescription" "$modListWidth") "
         
         modCounter=$(($modCounter + 1))
       done
